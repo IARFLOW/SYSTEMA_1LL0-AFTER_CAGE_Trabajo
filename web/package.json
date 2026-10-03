@@ -1,0 +1,39 @@
+{
+  "name": "systema-web",
+  "version": "1.0.0",
+  "description": "Web del público, pantallas fijas y servidor de Systema 1LL0~ After Cage",
+  "scripts": {
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "layout": "node scripts/layout.mjs",
+    "start": "node server/index.js",
+    "dev": "node server/index.js --simulate",
+    "demo": "node scripts/demo.mjs",
+    "max": "node scripts/max-de-prueba.mjs",
+    "versiones": "node scripts/versiones.mjs",
+    "carteles": "node scripts/carteles.mjs",
+    "carga": "node scripts/carga.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "compression": "^1.8.2",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0",
+    "express": "^5.2.1",
+    "node-osc": "^11.7.1",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@fontsource/space-mono": "^5.3.0",
+    "d3-force": "^3.0.0",
+    "esbuild": "^0.28.2",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=22.11"
+  }
+}

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0c0c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Systema 1LL0~ After Cage</title>
+  <!-- El tema elegido, antes de pintar nada: sin esto quien eligió el claro
+       veía un destello oscuro en cada carga (app.js es un módulo y corre tarde). -->
+  <script>try { if (localStorage.getItem('systema-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}</script>
+  <link rel="preload" href="/fonts/space-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <!-- Cabecera: wordmark tecleado, la tilde es una onda que respira -->
+  <header class="top">
+    <h1 class="brand">
+      <span class="brand-name">SYSTEMA 1LL0<svg class="tilde" viewBox="0 0 22 10" width="18" height="8" aria-hidden="true"><path d="M1 6.5c2.5-5 5.5-5 8 0s5.5 5 8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <span class="brand-sub">after cage</span>
+    </h1>
+    <button class="text-btn" id="theme" type="button" aria-label="Cambiar entre fondo oscuro y claro"><span id="theme-label">claro</span></button>
+    <!-- Leyenda: los dos colores de lo que suena. En la cabecera y no sobre el
+         mapa: encima tapaba las palabras que pasaban por debajo. -->
+    <p class="key"><span class="key-room">en sala</span><span class="key-phone">en un móvil</span></p>
+  </header>
+
+  <!-- Lienzo del mapa: un único SVG plano, pan y zoom con d3-zoom.
+       Las cuatro marcas de esquina lo enmarcan como una página de partitura. -->
+  <div class="stage" id="stage">
+    <svg id="map" aria-label="Mapa de conceptos"></svg>
+    <i class="mark tl" aria-hidden="true"></i><i class="mark tr" aria-hidden="true"></i>
+    <i class="mark bl" aria-hidden="true"></i><i class="mark br" aria-hidden="true"></i>
+
+    <p class="hint" id="hint">toca una palabra para verla<i class="caret"></i></p>
+    <!-- Lo que hay que decirle al visitante sin abrir nada (una palabra sin
+         vídeo, un vídeo que no se puede ver): tecleado en el sitio del hint.
+         Para el lector de pantalla va entero en #sr-live. -->
+    <p class="note" id="note" aria-hidden="true" hidden></p>
+
+    <!-- Línea «en sala»: lo que están reproduciendo las pantallas ahora mismo,
+         tecleado letra a letra. Tocar un nombre lleva el mapa hasta él. Lo que
+         entra se anuncia entero en #sr-live: esta línea cambia letra a letra y
+         un lector de pantalla la deletrearía. -->
+    <div class="live" id="live">
+      <span class="live-dot" id="conn" title="Conexión con la sala"></span>
+      <span class="live-label">en sala</span>
+      <div class="live-list" id="live-list"><span class="live-empty">— nada ahora mismo</span></div>
+      <button class="text-btn" id="recenter" type="button" aria-label="Recentrar el mapa">centrar</button>
+    </div>
+  </div>
+
+  <!-- Reproductor: un único elemento de vídeo, creado con el mapa y reutilizado.
+       disablepictureinpicture: sin él, en Android, salir de Chrome con el vídeo
+       a pantalla completa lo convertía en una ventanita flotante que seguía
+       sonando, y al volver la página quedaba ampliada (×1,55, medido). -->
+  <section class="player" id="player" role="dialog" aria-modal="true" aria-labelledby="now-label" hidden>
+    <video id="video" playsinline preload="metadata" disablepictureinpicture></video>
+    <div class="sim" id="sim" hidden>
+      <p class="sim-label" id="sim-label"></p>
+      <p class="sim-note">clip simulado · sin MP4 todavía</p>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="progress"></i></div>
+    <div class="player-ui">
+      <button class="text-btn on-video" id="back" type="button">← mapa</button>
+      <span class="timer" id="timer">0'00"</span>
+    </div>
+    <div class="now" id="now">
+      <span class="now-label" id="now-label"></span>
+      <span class="now-room" id="now-room" hidden>también en la sala</span>
+    </div>
+  </section>
+
+  <!-- Aviso de pérdida de conexión -->
+  <div class="toast" id="toast" role="alert" hidden>sin conexión con la sala · reconectando<i class="caret"></i></div>
+  <p class="sr-only" id="sr-live" aria-live="polite"></p>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

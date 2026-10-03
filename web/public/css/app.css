@@ -1,0 +1,588 @@
+/* Systema 1LL0~ After Cage · web del público
+   La web la planteé como una partitura gráfica escrita a máquina, como
+   vuestro documento y como las conferencias que Cage tecleaba. Una sola
+   letra mono, reglas punteadas y marcas de esquina de página, y un único
+   color de acento, guardado para lo que está sonando en la sala. Todo va en
+   variables, oscuro por defecto y claro «papel» con <html data-theme="light">.
+
+   Los conceptos son las propias palabras, tecleadas donde antes iba un punto.
+   Me lo pedisteis en la reunión del 23-09-2026. Guille quería «que en vez de
+   puntos sea la palabra» y «que esté centrado donde está el punto», y Juanlu
+   «un juego de tamaños de letra y negrita» para los conceptos importantes. De
+   ahí sale todo lo del mapa. Tres cuerpos y dos grosores (Space Mono solo
+   tiene 400 y 700), la letra fija sobre la página, que crece al acercarse
+   como un papel bajo la lupa, y las líneas, que paran en la palabra en vez de
+   atravesarla. Si un día volvemos a los puntos, todo esto cambia.
+
+   El movimiento es solo transform/opacity, salvo la señal que recorre las
+   líneas de lo que suena en la sala (stroke-dashoffset sobre líneas de 1 px).
+   Es el único momento animado del mapa. Lo que ponen los móviles se tiñe y no
+   se mueve, para que la sala siga siendo lo que se oye. */
+
+@font-face {
+  font-family: 'Space Mono';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/space-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/space-mono-700.woff2') format('woff2');
+}
+
+:root {
+  --bg: #0c0c0c;
+  --fg: #e6e4dc;                   /* blanco roto, no blanco de pantalla */
+  --muted: #8f8e86;              /* 5,9:1 sobre el fondo, AA para texto normal */
+  --rule: rgba(230, 228, 220, 0.22);
+  --accent: #58e07a;               /* lo que suena en la sala (verde, como sugiere el documento) */
+  --accent-ink: #0c0c0c;
+  /* Lo que está viendo alguien en su móvil, la segunda tinta del mapa. La
+     pidió Juanlu el 23-09-2026 («las teles son un color, los móviles son
+     otro», con «una pequeña leyenda»), y el magenta lo aprobó el 2-10-2026.
+     Lo elegí porque se distingue del verde también con daltonismo, y porque
+     el ámbar ya es el aviso de «sin conexión». Lo medí el 28-09-2026 con la
+     simulación de Machado, Oliveira y Fernandes (2009), y entre este verde y
+     este magenta quedan como poco 60 de ΔE con deuteranopía. Con el rojo que
+     puso Juanlu de ejemplo se quedarían en 20, casi el mismo color. Sobre el
+     fondo da 7,2:1. */
+  --mobile: #ea70d2;
+  --danger: #e0a558;
+  --mono: 'Space Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  color-scheme: dark;
+}
+
+/* Tema claro «papel». La letra mono sobre papel sale de lo que me pasasteis.
+   Vuestro PDF está compuesto en monoespaciada sobre papel, aiwar.cloud (la
+   referencia que me disteis) es mono sobre claro, y Cage escribía sus
+   conferencias a máquina. */
+:root[data-theme='light'] {
+  --bg: #f4f2ec;
+  --fg: #161616;
+  --muted: #65635c;              /* 5,4:1 sobre el papel, AA para texto normal */
+  --rule: rgba(22, 22, 22, 0.26);
+  --accent: #0a7a36;
+  --accent-ink: #f4f2ec;
+  --mobile: #a3218c;             /* la segunda tinta en papel da 5,9:1 y 49 de ΔE con el verde */
+  --danger: #8a5410;             /* el aviso de «sin conexión» tiene que leerse */
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+/* Casi todo va al mismo tamaño (12-13 px), a propósito. Una máquina de
+   escribir tiene un solo tamaño de letra, y de ahí sale la web entera. Esto
+   ya es cosa mía, porque vuestro «Explicación más concisa programación.pdf»
+   sí usa varios cuerpos (30 pt el título, 12 el texto). En la interfaz, lo
+   que manda lo marcan el grosor (400 contra 700) y el color del acento. Solo
+   hay dos saltos de tamaño, y los dos son de contenido. Uno es el
+   reproductor (12 px → hasta 48), donde el concepto es lo único en pantalla.
+   El otro, las palabras del mapa, en tres cuerpos porque me lo pedisteis
+   (ver la cabecera). */
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  overscroll-behavior: none;       /* sin rebote elástico */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  /* 100 % (el del html, que sigue al alto visible) y no 100vh. En Chrome para
+     Android anterior al 108, 100vh mide la pantalla con la barra escondida y
+     la línea «en sala» quedaba tapada por la barra del navegador. */
+  height: 100%;
+  height: 100dvh;                  /* alto útil real en navegadores modernos */
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Botón de texto, con subrayado punteado como una nota al margen. Área táctil 44 px. */
+.text-btn {
+  position: relative;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--muted);
+  /* Por partes y con prefijo, porque hasta iOS 26.2 Safari descarta el atajo
+     «underline dotted» entero y el botón se quedaba sin subrayado. */
+  -webkit-text-decoration: underline dotted;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color 0.2s, transform 0.15s var(--ease);
+}
+.text-btn:active { transform: scale(0.96); color: var(--fg); }
+.text-btn.on-video { color: #ddd; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
+
+/* Foco de teclado. La web se usa con el dedo, pero un estático puede
+   manejarse con teclado o conmutador y el foco tiene que verse. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* En un <g> de SVG, Chrome pinta SU anillo de foco (azul del sistema, con
+   esquinas redondeadas) en :focus, sin esperar a :focus-visible, así que
+   aparecía también al tocar con el dedo. Lo apago y dibujo el mío, una caja
+   punteada ceñida a la palabra, como las reglas de la página, en la paleta y
+   solo con teclado. El foco se sustituye y quien use teclado lo sigue viendo. */
+.node:focus { outline: none; }
+.node .focus {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+}
+.node:focus-visible .focus { opacity: 1; }
+
+/* Solo para lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Cursor de máquina, que parpadea en el hint y en el aviso */
+.caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- Cabecera ---------- */
+.top {
+  display: flex;
+  flex-wrap: wrap;                 /* la leyenda baja a su propia línea */
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+  padding: calc(6px + var(--safe-top)) 12px 6px 16px;
+  border-bottom: 1px dotted var(--rule);   /* la regla punteada del documento */
+  -webkit-user-select: none;                /* Safari solo entiende el prefijo */
+  user-select: none;
+}
+.brand {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  line-height: 1;
+}
+.brand-name { display: inline-flex; align-items: center; gap: 2px; }
+.tilde { color: var(--accent); overflow: visible; }
+.tilde path {
+  /* la onda respira (solo transform, 4 s) y nunca llama la atención */
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: breathe 4s ease-in-out infinite;
+}
+@keyframes breathe { 50% { transform: scaleY(0.4); } }
+.brand-sub {
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---------- Lienzo, una página de partitura ---------- */
+.stage {
+  position: relative;
+  overflow: hidden;
+}
+#map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;              /* el pinch lo gestiona d3-zoom, no Safari */
+}
+/* El lienzo lleva la flecha normal. La mano del cursor aparece solo sobre
+   un concepto, que es lo único pulsable. Una mano permanente sobre todo el
+   mapa dice «agárrame» donde no hay nada que agarrar. */
+.node { cursor: pointer; }
+
+/* Marcas de esquina (crop marks) */
+.mark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border: 0 solid var(--rule);
+}
+.mark.tl { top: 10px; left: 10px; border-top-width: 1px; border-left-width: 1px; }
+.mark.tr { top: 10px; right: 10px; border-top-width: 1px; border-right-width: 1px; }
+.mark.bl { bottom: calc(58px + var(--safe-bottom)); left: 10px; border-bottom-width: 1px; border-left-width: 1px; }
+.mark.br { bottom: calc(58px + var(--safe-bottom)); right: 10px; border-bottom-width: 1px; border-right-width: 1px; }
+
+.link {
+  stroke: var(--fg);
+  stroke-opacity: 0.18;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke; /* líneas de 1 px a cualquier zoom */
+  fill: none;
+  transition: stroke 0.3s, stroke-opacity 0.3s;
+}
+/* La señal recorre la arista que toca un nodo activo (el «beam», en SVG puro) */
+.link.lit {
+  stroke: var(--accent);
+  stroke-opacity: 0.9;
+  stroke-dasharray: 3 9;
+  animation: travel 1.4s linear infinite;
+}
+@keyframes travel { to { stroke-dashoffset: -12; } }
+
+/* Cada concepto es su palabra (ver la cabecera). Hay tres niveles, el 1 y el 2
+   en negrita y el 3 en redonda. El cuerpo de cada nivel lo pone app.js desde
+   map.json, en unidades del mapa, así que crece con el zoom. */
+.node .word {
+  font-family: var(--mono);
+  font-weight: 400;
+  fill: var(--fg);
+  transform-origin: center;
+  transform-box: fill-box;
+  transition: fill 0.3s, transform 0.18s var(--ease);
+}
+.node.lv1 .word,
+.node.lv2 .word { font-weight: 700; }
+.node:active .word { transform: scale(0.94); }
+
+/* Debajo de cada palabra va una caja del color del fondo. Las líneas pasan por
+   detrás y parecen terminar en la palabra en vez de atravesarla. */
+.node .knock { fill: var(--bg); }
+
+/* Lo último tocado en este móvil, subrayado como se subraya a máquina */
+.node .mark {
+  stroke: var(--fg);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+}
+.node.touched .mark { opacity: 1; }
+
+/* Lo que suena en la sala sale con la palabra en verde y la señal recorriendo
+   sus líneas (.link.lit). Lo que se ve en algún móvil va en la segunda tinta,
+   quieto. El JS solo cambia las clases. */
+.node.active .word { fill: var(--accent); }
+.node.active .mark { stroke: var(--accent); }
+.node.mobile .word { fill: var(--mobile); }
+.node.mobile .mark { stroke: var(--mobile); }
+
+/* Con el mapa girado, una palabra que no cabe sin pisar a otra calla hasta que
+   vuelva a haber sitio (ver declutter() en app.js). */
+.node { transition: opacity 0.2s; }
+#map .node.crowded { opacity: 0; pointer-events: none; }
+
+/* En la entrada, las palabras aparecen del centro hacia fuera, una sola vez.
+   Solo opacity, en el grupo. Su transform de posición va como atributo. */
+.map-enter .node { animation: node-in 0.5s var(--ease) both; animation-delay: var(--d, 0ms); }
+.map-enter .link { animation: link-in 0.9s ease-out both; animation-delay: 350ms; }
+@keyframes node-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes link-in { from { stroke-opacity: 0; } }
+
+/* La leyenda, con los dos colores de lo que suena escritos en su propio
+   color. La pidió Juanlu («una pequeña leyenda», ver --mobile). Va en la
+   cabecera, en una segunda línea bajo el título, como el cajetín de una
+   partitura. Encima del mapa tapaba las palabras que pasaban por debajo (lo
+   vi el 28-09-2026, «Encuentros 72» se quedaba en «E…cuentros»). */
+.key {
+  flex-basis: 100%;
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding-bottom: 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+.key-room { color: var(--accent); }
+.key-phone { color: var(--mobile); }
+
+/* ---------- Línea «en sala» (al alcance del pulgar) ---------- */
+.live {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: calc(48px + var(--safe-bottom));
+  padding: 0 8px var(--safe-bottom) 16px;
+  border-top: 1px dotted var(--rule);
+  background: var(--bg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.live-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+/* Conectado, la tinta de siempre. El verde es solo para lo que suena en la
+   sala, y el punto estaba verde también con la sala callada. Sin conexión,
+   el color del aviso. */
+.live-dot.on { background: var(--fg); }
+.offline .live-dot { background: var(--danger); }
+.live-label {
+  flex: none;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.live-list {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+  mask-image: linear-gradient(90deg, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent);
+}
+.live-list::-webkit-scrollbar { display: none; }
+.live-empty { color: var(--muted); }
+/* Cada concepto en sala lo teclea el JS letra a letra, con un guion
+   de partitura delante. Tocar lleva el mapa hasta él. */
+.entry {
+  flex: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px 0 0;
+  color: var(--fg);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+}
+.entry::before {
+  content: '';
+  width: 10px;
+  height: 1px;
+  margin-right: 6px;
+  background: var(--accent);
+}
+.entry:active { transform: scale(0.96); }
+
+/* Va sobre el dibujo, así que lleva el mismo recorte que los nombres del
+   mapa. Un nombre que pasaba por debajo se mezclaba con la frase y no se leía
+   ninguno de los dos («concAtlas pEclipticalis»). */
+.hint {
+  position: absolute;
+  left: 16px;
+  bottom: calc(60px + var(--safe-bottom));
+  margin: 0 0 0 -6px;
+  padding: 2px 6px;
+  background: var(--bg);
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.hint.hide { opacity: 0; }
+/* La nota es lo mismo que el hint, en tinta normal, y solo un rato. */
+.note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(60px + var(--safe-bottom));
+  margin: 0 0 0 -6px;
+  padding: 2px 6px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  background: var(--bg);
+  color: var(--fg);
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.note.hide { opacity: 0; }
+.note[hidden] { display: none; }
+/* Sin conexión, el aviso tapa al hint y a la nota (antes se escribían uno
+   encima del otro), la señal de las líneas se para, que es lo que pasa, y lo
+   que dice la barra «en sala» se apaga, porque ya no es seguro. Bajo el
+   vídeo, la señal también se para. Nadie la ve y el móvil la repintaba igual. */
+.offline .hint, .offline .note { opacity: 0; }
+.offline .link.lit, .viendo .link.lit, .viendo .tilde path { animation-play-state: paused; }
+.offline .live-list { opacity: 0.45; }
+
+/* ---------- Reproductor ---------- */
+.player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: grid;
+  z-index: 10;
+}
+.player[hidden] { display: none; }
+/* Entra con un fundido de CSS y no con View Transition, porque el vídeo tiene
+   que arrancar en el mismo instante del toque (ver open() en app.js). */
+.player:not([hidden]) { animation: player-in 0.25s var(--ease); }
+@keyframes player-in { from { opacity: 0; } }
+.player video,
+.player .sim {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.sim {
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.sim[hidden] { display: none; }
+.sim-label {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 48px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-wrap: balance;
+}
+.sim-note {
+  margin: 12px 0 0;
+  color: #666;
+}
+/* Tiempo restante como línea fina arriba, que se vacía de derecha a izquierda */
+.progress {
+  grid-area: 1 / 1;
+  align-self: start;
+  height: 1px;
+  margin-top: var(--safe-top);
+  background: rgba(255, 255, 255, 0.15);
+  z-index: 1;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transform-origin: left;
+  transform: scaleX(1);
+  transition: transform 0.3s linear;
+}
+.player-ui {
+  grid-area: 1 / 1;
+  align-self: start;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(6px + var(--safe-top)) 16px 0;
+  z-index: 1;
+}
+/* Cuenta atrás en la notación de Cage (4'33") */
+.timer {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: #ddd;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  font-variant-numeric: tabular-nums;
+}
+/* Cargando o atascado lleva el cursor de máquina, el mismo del hint. */
+.timer.loading::after {
+  content: '';
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 4px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: blink 1.1s steps(1) infinite;
+}
+/* El nombre del concepto entra con el vídeo y se retira solo a los 2,5 s */
+.now {
+  grid-area: 1 / 1;
+  align-self: end;
+  justify-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 16px calc(16px + var(--safe-bottom));
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s, transform 0.4s var(--ease);
+}
+.now.show { opacity: 1; transform: none; }
+.now-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+}
+.now-room { color: var(--accent); }
+.now-room::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 1px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--accent);
+}
+.now-room[hidden] { display: none; }
+
+/* ---------- Aviso ---------- */
+.toast {
+  position: fixed;
+  left: 16px;
+  bottom: calc(60px + var(--safe-bottom));
+  margin: 0 0 0 -6px;
+  padding: 2px 6px;
+  max-width: calc(100% - 32px);
+  background: var(--bg);           /* el mismo recorte que el hint, por lo mismo */
+  color: var(--danger);
+  z-index: 20;
+}
+.toast[hidden] { display: none; }
+
+/* Transición mapa ↔ vídeo cuando el navegador la soporta (mejora progresiva) */
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 0.25s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .link.lit { animation: none; stroke-dasharray: none; }
+  .tilde path, .caret, .timer.loading::after { animation: none; }
+  .map-enter .node,
+  .map-enter .link,
+  .player:not([hidden]) { animation: none; }
+  .hint, .note, .now, .entry, .text-btn, .node, .node .word { transition: none; }
+}

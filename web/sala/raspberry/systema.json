@@ -1,0 +1,6 @@
+{
+  "TranslateEnabled": false,
+  "AutoplayAllowed": true,
+  "DiskCacheSize": 104857600,
+  "ExtensionInstallBlocklist": ["*"]
+}

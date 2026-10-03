@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Systema · sala</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    /* El panel de la sala es una hoja de sala escrita a máquina, una línea
+       por pantalla, como un parte de guardia, pa quien monta y pa quien
+       enciende cada mañana. Enseña cada pantalla, si está conectada y qué
+       pone, cuántos móviles hay, lo último que llega del Max y el registro en
+       vivo. Va con el mismo estilo que la web del público (la cabecera de
+       public/css/app.css), con la misma letra, las reglas punteadas y las
+       mismas tintas con el mismo sentido. Verde, solo lo que suena en la sala.
+       Magenta, lo que se ve en un móvil. Ámbar, lo que hay que arreglar. Es un
+       panel denso y lo primero es que se lea bien, así que no se mueve nada
+       salvo el cursor de lo que está pendiente. */
+    html, body { height: auto; overflow: auto; }
+    body { display: block; padding: 0 16px 48px; font-size: 13px; line-height: 1.5; }
+    main { max-width: 980px; }
+    .top { padding-left: 0; padding-right: 0; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+    .vivo { color: var(--muted); }
+    h2 {
+      margin: 28px 0 0;
+      padding-bottom: 6px;
+      border-bottom: 1px dotted var(--rule);
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+    .fila {
+      display: grid;
+      grid-template-columns: 9ch 1fr auto;
+      gap: 2px 16px;
+      align-items: baseline;
+      padding: 8px 0;
+      border-bottom: 1px dotted var(--rule);
+    }
+    .fila .nombre { font-weight: 700; }
+    .fila .que { min-width: 0; }
+    .fila .paginas { grid-column: 2; color: var(--muted); }
+    .fila .acciones { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 8px; }
+    .suena { color: var(--accent); }
+    .movil { color: var(--mobile); }
+    .ojo { color: var(--danger); }
+    .tiempo { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .lista { list-style: none; margin: 0; padding: 0; }
+    .lista li { display: grid; grid-template-columns: 9ch 1fr; gap: 0 16px; padding: 4px 0; border-bottom: 1px dotted var(--rule); }
+    .lista .t { color: var(--muted); }
+    .lista .r { grid-column: 2; color: var(--muted); }
+    .lista .warn .r, .lista li.ojo .r { color: var(--danger); }
+    .vacio { padding: 8px 0; color: var(--muted); }
+    /* En las listas, el «nada que arreglar» ocupa la fila entera, porque en
+       la columna de la hora se partía en dos líneas. */
+    .lista li.vacio { display: block; }
+    p.linea { margin: 8px 0 0; }
+    .sin-conexion { margin: 0; padding: 6px 0; color: var(--danger); }
+    .sin-conexion[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <p class="sin-conexion" id="sin" role="alert" hidden>sin conexión con el servidor · reintentando<i class="caret"></i></p>
+  <main>
+    <header class="top">
+      <h1 class="brand"><span class="brand-name">SYSTEMA 1LL0<svg class="tilde" viewBox="0 0 22 10" width="18" height="8" aria-hidden="true"><path d="M1 6.5c2.5-5 5.5-5 8 0s5.5 5 8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="brand-sub">sala</span></h1>
+      <p class="vivo" id="vivo">conectando…</p>
+    </header>
+
+    <h2>pantallas<span id="cuenta"></span></h2>
+    <div id="pantallas"><p class="vacio">ninguna pantalla todavía</p></div>
+    <p class="linea"><button class="text-btn" id="identificar-todas" type="button">identificar todas</button></p>
+
+    <h2>avisos</h2>
+    <ol class="lista" id="avisos"><li class="vacio">nada que arreglar</li></ol>
+
+    <h2>móviles del público</h2>
+    <p class="linea" id="moviles">-</p>
+
+    <h2>vídeos</h2>
+    <p class="linea" id="videos">-</p>
+
+    <h2>lo que llega de max</h2>
+    <p class="linea" id="max">-</p>
+    <ol class="lista" id="osc"><li class="vacio">todavía nada</li></ol>
+  </main>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+    const clave = new URLSearchParams(location.search).get('clave') || undefined;
+    let sock = null;
+    let ultimo = null;
+    let recibido = 0;
+
+    // Notación de Cage, como en la web (4'33")
+    const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}'${String(s % 60).padStart(2, '0')}"`; };
+    const el = (tag, cls, text) => Object.assign(document.createElement(tag), cls ? { className: cls } : {}, text !== undefined ? { textContent: text } : {});
+    const enviar = (msg) => { if (sock?.readyState === WebSocket.OPEN) sock.send(JSON.stringify(msg)); };
+    const desde = (iso) => {
+      const s = Math.round((Date.now() - new Date(iso)) / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      return h ? `${h} h ${m} min` : `${m} min`;
+    };
+
+    // Una línea por pantalla, con qué pone, cuánto le queda y cómo está cada
+    // página abierta. Lo que hay que arreglar va en ámbar y lo dice con
+    // palabras, como sin página, sin activar (falta el toque) o un error.
+    function pantalla(s) {
+      const fila = el('div', 'fila');
+      fila.append(el('span', 'nombre', s.name));
+      const que = el('span', 'que');
+      if (s.playing) {
+        const t = el('span', 'tiempo');
+        t.dataset.at = s.playing.at;
+        t.dataset.dur = s.playing.duration;
+        que.append('pone ', el('span', 'suena', `«${s.playing.label}»`), s.playing.num ? ` (vídeo ${s.playing.num}) ` : ' ', t);
+      } else que.append(el('span', 'tiempo', 'en negro'));
+      fila.append(que);
+      const acciones = el('span', 'acciones');
+      const b1 = el('button', 'text-btn', 'identificar');
+      b1.type = 'button';
+      b1.dataset.k = `${s.name}:identificar`;
+      b1.addEventListener('click', () => enviar({ type: 'panel:identify', screen: s.name }));
+      const b2 = el('button', 'text-btn', 'recargar');
+      b2.type = 'button';
+      b2.dataset.k = `${s.name}:recargar`;
+      // Un navegador olvida el toque al recargar. Un iPad o una tablet se
+      // quedan sin sonido y sin pantalla completa hasta que alguien los toque.
+      b2.title = 'un iPad o una tablet vuelven a necesitar un toque para sonar y ponerse a pantalla completa';
+      b2.addEventListener('click', () => enviar({ type: 'panel:reload', screen: s.name }));
+      if (!s.pages.length) { b1.disabled = true; b2.disabled = true; }
+      acciones.append(b1, b2);
+      fila.append(acciones);
+      const paginas = el('span', 'paginas');
+      if (!s.pages.length) paginas.append(el('span', 'ojo', 'sin página abierta, el aparato está apagado o no ha cargado /screen/' + s.name));
+      if (s.listed === false) {
+        const nota = el('span', 'ojo', 'no está en la lista de pantallas (PANTALLAS), igual es una errata en el patch o en el nombre del aparato');
+        if (s.pages.length) paginas.append(nota, ' · ');
+        else paginas.append(' · ', nota);
+      }
+      for (const [i, p] of s.pages.entries()) {
+        if (i) paginas.append(' · ');
+        paginas.append(`${p.ip ?? '?'} `);
+        if (p.sound === false) paginas.append(el('span', 'ojo', 'sin activar, hay que tocarla para que suene'));
+        else if (p.sound) paginas.append('suena');
+        else paginas.append('presentándose');
+        if (p.waiting) paginas.append(' · ', el('span', 'ojo', 'esperando datos del vídeo'));
+        else if (p.paused) paginas.append(' · ', el('span', 'ojo', 'el vídeo está parado'));
+        if (p.hidden) paginas.append(' · ', el('span', 'ojo', 'oculta (pantalla bloqueada o en otra app)'));
+        if (p.error) paginas.append(' · ', el('span', 'ojo', p.error));
+        if (p.version) paginas.append(` · versión ${p.version}`);
+        if (p.size) paginas.append(` · ${p.size}`);
+      }
+      fila.append(paginas);
+      return fila;
+    }
+
+    function pintar(m) {
+      ultimo = m;
+      recibido = performance.now();
+      // El foco del teclado se queda en el mismo botón aunque se repinte todo.
+      const foco = document.activeElement?.dataset?.k;
+      const caja = $('pantallas');
+      caja.textContent = '';
+      if (!m.screens.length) caja.append(el('p', 'vacio', 'ninguna pantalla todavía'));
+      for (const s of m.screens) caja.append(pantalla(s));
+      // Con la lista de la sala (PANTALLAS), cuántas de ellas tienen su página abierta.
+      const esperadas = m.screens.filter((s) => s.listed);
+      const abiertas = esperadas.filter((s) => s.pages.length).length;
+      $('cuenta').textContent = esperadas.length ? ` · ${abiertas} de ${esperadas.length} conectadas` : '';
+      $('cuenta').className = esperadas.length && abiertas < esperadas.length ? 'ojo' : '';
+
+      const avisos = $('avisos');
+      avisos.textContent = '';
+      if (!m.avisos.length) avisos.append(el('li', 'vacio', 'nada que arreglar'));
+      for (const a of m.avisos) {
+        const li = el('li', 'ojo');
+        li.append(el('span', 't', a.t.split(' ')[1] ?? a.t), el('span', 'r', a.text));
+        avisos.append(li);
+      }
+
+      const mov = $('moviles');
+      mov.textContent = `${m.phones} ${m.phones === 1 ? 'conectado' : 'conectados'}`;
+      if (m.mobile.length) mov.append(' · viendo ', el('span', 'movil', m.mobile.join(', ')));
+      if (m.active.length) mov.append(' · en sala ', el('span', 'suena', m.active.join(', ')));
+
+      const v = $('videos');
+      v.textContent = `${m.catalog.conceptos} conceptos, ${m.catalog.conVideo} con vídeo`;
+      if (m.catalog.missing.length) v.append(' · ', el('span', 'ojo', `sin su vídeo en media/: ${m.catalog.missing.join(', ')}`));
+
+      $('max').textContent = `escucha en ${m.oscListening ?? '-'}`;
+      if (/SIN PUERTO|ERROR/.test(m.oscListening ?? '')) $('max').className = 'linea ojo';
+      else $('max').className = 'linea';
+      const osc = $('osc');
+      osc.textContent = '';
+      if (!m.osc.length) osc.append(el('li', 'vacio', 'todavía nada'));
+      for (const o of m.osc) {
+        const li = el('li', o.level);
+        li.append(el('span', 't', o.t), el('span', '', o.text), el('span', 'r', `→ ${o.result}`));
+        osc.append(li);
+      }
+      reloj();
+      if (foco) document.querySelector(`[data-k="${CSS.escape(foco)}"]`)?.focus();
+    }
+
+    // Lo que le queda a cada vídeo y desde cuándo corre el servidor. Se
+    // reescriben solo estos textos, cada segundo, entre una noticia del
+    // servidor y la siguiente.
+    function reloj() {
+      if (!ultimo) return;
+      const pasa = (performance.now() - recibido) / 1000;
+      $('vivo').textContent = `${ultimo.version} · en marcha desde hace ${desde(ultimo.started)}`
+        + `${ultimo.scene !== null && ultimo.scene !== undefined ? ` · escena ${ultimo.scene}` : ''}`;
+      for (const t of document.querySelectorAll('.tiempo[data-dur]')) {
+        t.textContent = `${fmt(Number(t.dataset.at) + pasa)} de ${fmt(Number(t.dataset.dur))}`;
+      }
+    }
+    setInterval(() => { if (!document.hidden) reloj(); }, 1000);
+
+    $('identificar-todas').addEventListener('click', () => enviar({ type: 'panel:identify' }));
+
+    let espera = 1000;
+    function conectar() {
+      const s = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      sock = s;
+      let ido = false;
+      const perdido = () => {
+        if (ido) return;
+        ido = true;
+        $('sin').hidden = false;
+        setTimeout(conectar, espera);
+        espera = Math.min(espera * 2, 10000);
+      };
+      s.addEventListener('open', () => {
+        espera = 1000;
+        s.send(JSON.stringify({ type: 'hello', role: 'panel', clave }));
+      });
+      s.addEventListener('message', (ev) => {
+        let m;
+        try { m = JSON.parse(ev.data); } catch { return; }
+        if (m.type === 'panel') { $('sin').hidden = true; pintar(m); }
+      });
+      s.addEventListener('close', perdido);
+      s.addEventListener('error', perdido);
+    }
+    conectar();
+  </script>
+</body>
+</html>

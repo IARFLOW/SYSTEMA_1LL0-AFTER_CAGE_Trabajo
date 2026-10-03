@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>Systema · pantalla</title>
+  <link rel="preload" href="/fonts/space-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    /* Pantalla fija de la sala, en negro de verdad y no el casi negro de la web.
+       En una tele, lo que no pone nada no se tiene que ver. Va sin cursor,
+       porque en las pantallas por HDMI o con Raspberry se quedaría en medio. */
+    html, body { background: #000; cursor: none; }
+    video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    video[hidden] { display: none; }
+    /* Sin MP4 todavía, el nombre del concepto y lo que le queda, como el clip
+       simulado del móvil, a la escala de una tele. */
+    .clip {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      padding: 6vmin;
+      text-align: center;
+    }
+    .clip[hidden] { display: none; }
+    .clip-label {
+      margin: 0;
+      font-size: clamp(32px, 9vmin, 140px);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-wrap: balance;
+    }
+    .clip-time {
+      margin: 2vmin 0 0;
+      font-size: clamp(14px, 3vmin, 40px);
+      color: var(--muted);
+    }
+    .clip-note {
+      margin: 1vmin 0 0;
+      font-size: clamp(11px, 1.8vmin, 24px);
+      color: #666;
+    }
+    /* Estado de la pantalla, abajo a la izquierda. Se va sola cuando todo
+       está bien, y se queda si falta la conexión o el toque del sonido. */
+    .tag {
+      position: fixed;
+      left: calc(3vmin + env(safe-area-inset-left, 0px));
+      bottom: calc(3vmin + env(safe-area-inset-bottom, 0px));
+      margin: 0;
+      font-size: clamp(12px, 2vmin, 26px);
+      color: var(--muted);
+      transition: opacity 0.6s var(--ease);
+    }
+    .tag.call { color: var(--fg); }
+    .tag.gone { opacity: 0; }
+    /* «Identificar», desde el panel de la sala, pone el nombre de la pantalla en
+       grande unos segundos, para saber en el montaje qué tele es cuál. Va en el
+       registro de la web, mecanografiado y con la regla punteada debajo. */
+    .ident {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      margin: 0;
+      font-size: clamp(48px, 22vmin, 320px);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--fg);
+      background: #000;
+      z-index: 5;
+    }
+    .ident::after {
+      content: '';
+      display: block;
+      margin-top: 2vmin;
+      border-bottom: max(2px, 0.4vmin) dotted var(--muted);
+    }
+    .ident[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <!-- preload="auto", porque en la sala la red es local y una pantalla pone un
+       vídeo entero. Mejor que baje de golpe que a trompicones. -->
+  <video id="video" playsinline preload="auto" disablepictureinpicture hidden></video>
+  <div class="clip" id="clip" hidden>
+    <p class="clip-label" id="clip-label"></p>
+    <p class="clip-time" id="clip-time"></p>
+    <p class="clip-note">clip simulado · falta el MP4 (solo en desarrollo)</p>
+  </div>
+  <p class="ident" id="ident" hidden></p>
+  <p class="tag" id="tag" role="status"></p>
+  <script type="module" src="/js/screen.js"></script>
+</body>
+</html>

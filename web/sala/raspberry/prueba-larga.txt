@@ -1,0 +1,16 @@
+0, /tele1/video 1;
+2, /tele2/video 2;
+4, /tele3/video 3;
+25, /tele1/video 2;
+30, /tele2/video 0;
+35, /tele3/video 1;
+50, /tele1/video 0;
+55, /tele2/video 3;
+60, /tele3/video 3;
+75, /tele1/video 3;
+85, /tele2/video 1;
+90, /tele3/video 0;
+100, /tele1/video 1;
+105, /tele3/video 2;
+110, /tele2/video 0;
+115, /tele1/video 0;

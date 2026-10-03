@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Systema · simulador de sala</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    body { display: block; overflow: auto; padding: 16px; font-size: 14px; }
+    h1 { font-size: 13px; letter-spacing: .06em; margin: 0 0 4px; }
+    h2.sec { font-size: 12px; letter-spacing: .06em; margin: 28px 0 4px; }
+    p { color: var(--muted); font-size: 11px; margin: 0 0 16px; }
+    .bar { font-size: 12px; margin: 0 0 16px; }
+    .screens { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .screen { border: 1px dotted var(--rule); padding: 12px; }
+    .screen h2 { font-size: 12px; margin: 0 0 4px; display: flex; justify-content: space-between; gap: 8px; }
+    .screen h2 a { color: var(--muted); font-weight: 400; }
+    .plays { font-size: 11px; color: var(--muted); margin: 0 0 8px; min-height: 2.8em; }
+    .plays b { color: var(--accent); font-weight: 400; }
+    select, button { font: inherit; width: 100%; padding: 8px; background: transparent; color: var(--fg); border: 1px solid var(--rule); }
+    button { margin-top: 8px; cursor: pointer; }
+    #active { margin-top: 20px; font-size: 12px; }
+    #active b { color: var(--accent); }
+    #mobile { margin-top: 6px; font-size: 12px; }
+    #mobile b { color: var(--mobile); }
+    .osc { list-style: none; margin: 0; padding: 0; font-size: 11px; }
+    .osc li { display: grid; grid-template-columns: 9ch 1fr; gap: 0 12px; padding: 4px 0; border-bottom: 1px dotted var(--rule); }
+    .osc .t { color: var(--muted); }
+    .osc .res { grid-column: 2; color: var(--muted); }
+    .osc .warn .res { color: var(--danger); }
+    .osc .dim { opacity: .55; }
+    .osc .empty { display: block; color: var(--muted); border: 0; }
+  </style>
+</head>
+<body>
+  <h1>SIMULADOR DE SALA</h1>
+  <p>Solo desarrollo. Lo que manda Max y lo que pone cada pantalla, en directo. También se puede elegir a mano qué pone cada una y ver cómo se enciende en <a href="/" style="color:inherit">el mapa</a>.</p>
+  <div class="bar" id="bar">conectando…</div>
+  <div class="screens" id="screens"></div>
+  <div id="active">activos <b>-</b></div>
+  <div id="mobile">en móviles <b>-</b></div>
+  <h2 class="sec">LO QUE LLEGA DE MAX</h2>
+  <p id="where"></p>
+  <ol class="osc" id="osc"><li class="empty">todavía nada</li></ol>
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+    // Las del simulador de siempre. Las de Max (tele1, tele2…) aparecen solas
+    // en cuanto llega su primer mensaje o se abre su página.
+    const FIXED = ['screen_01', 'screen_02', 'screen_03', 'screen_04', 'screen_05', 'screen_06'];
+    const map = await fetch('/map.json').then((r) => r.json());
+    const labels = new Map(map.nodes.map((n) => [n.id, n.label]));
+    const box = $('screens');
+    const cards = new Map();
+
+    function card(s) {
+      const div = document.createElement('div');
+      div.className = 'screen';
+      div.innerHTML = '<h2><span></span><a target="_blank" rel="noopener">abrir pantalla ↗</a></h2><p class="plays"></p><select></select><button type="button">NEGRO</button>';
+      div.querySelector('h2 span').textContent = s;
+      div.querySelector('a').href = `/screen/${s}`;
+      const sel = div.querySelector('select');
+      sel.append(new Option('— nada —', ''));
+      for (const n of map.nodes) sel.append(new Option(n.label, n.id));
+      const post = (content) => fetch(`/api/screen/${s}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content: content || null }),
+      });
+      sel.addEventListener('change', () => post(sel.value));
+      div.querySelector('button').addEventListener('click', () => { sel.value = ''; post(null); });
+      cards.set(s, { div, sel, plays: div.querySelector('.plays') });
+    }
+
+    function render(room) {
+      const names = [...Object.keys(room.screens), ...FIXED].filter((s) => !cards.has(s));
+      for (const s of new Set(names)) card(s);
+      if (names.length) {
+        // Las de Max primero, por nombre, y las del simulador después.
+        const order = [...cards.keys()].sort((a, b) => (FIXED.includes(a) - FIXED.includes(b)) || a.localeCompare(b));
+        for (const s of order) box.append(cards.get(s).div);
+      }
+      for (const [s, c] of cards) {
+        const st = room.screens[s];
+        if (document.activeElement !== c.sel) c.sel.value = st?.id ?? '';
+        c.plays.textContent = '';
+        if (st?.label) {
+          const b = document.createElement('b');
+          b.textContent = st.label;
+          c.plays.append('pone ', b, st.num ? ` (vídeo ${st.num})` : '');
+        } else c.plays.append('en negro');
+        const n = st?.displays ?? 0;
+        c.plays.append(document.createElement('br'),
+          n ? `${n} ${n > 1 ? 'páginas abiertas' : 'página abierta'}` : 'sin página abierta');
+      }
+      $('bar').textContent = `escena ${room.scene ?? '-'} · ${room.phones} ${room.phones === 1 ? 'móvil' : 'móviles'}`;
+      $('where').textContent = `Escucha a Max por OSC en ${room.oscListening ?? '-'}. El formato es /tele1/video 3 (el número de la hoja), y /tele1/video 0 para negro.`;
+      $('active').querySelector('b').textContent = room.active.map((id) => labels.get(id) ?? id).join(', ') || '-';
+      $('mobile').querySelector('b').textContent = room.mobile.map((id) => labels.get(id) ?? id).join(', ') || '-';
+      const list = $('osc');
+      list.textContent = '';
+      if (!room.osc.length) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = 'todavía nada';
+        list.append(li);
+      }
+      for (const m of room.osc) {
+        const li = document.createElement('li');
+        li.className = m.level;
+        const t = Object.assign(document.createElement('span'), { className: 't', textContent: m.t });
+        const msg = Object.assign(document.createElement('span'), { textContent: m.text });
+        const res = Object.assign(document.createElement('span'), { className: 'res', textContent: `→ ${m.result}` });
+        li.append(t, msg, res);
+        list.append(li);
+      }
+    }
+
+    function connect() {
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      ws.addEventListener('open', () => ws.send(JSON.stringify({ type: 'hello', role: 'dev' })));
+      ws.addEventListener('message', (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'room') render(msg);
+      });
+      ws.addEventListener('close', () => {
+        $('bar').textContent = 'sin conexión con el servidor · reintentando';
+        setTimeout(connect, 2000);
+      });
+    }
+    connect();
+  </script>
+</body>
+</html>
