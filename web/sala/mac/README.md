@@ -20,7 +20,7 @@ porqué, pa que sepas qué tocas en tu Mac y por qué te lo pido.
    una con el mismo nombre que usa el Max en `/tele1/video`.
 
    ```
-   sh sala/mac/instalar.sh --pantallas tele1,tele2,tele3
+   sh sala/mac/instalar.sh --pantallas tele1,tele2,monitor1,monitor2,proyector1,proyector2
    ```
 
    Deja la web en el puerto 80 (así `http://systema.internal/` va sin número) y
@@ -48,6 +48,10 @@ clave de letras, números, `_` y `-`, de 12 como poco. Sería
 `sh sala/mac/instalar.sh --clave-panel unaclavelarga`, y luego
 `http://systema.internal/panel?clave=unaclavelarga`. Sin clave, el panel solo
 se abre desde el propio Mac.
+
+Las pantallas que van por cable a este Mac se abren solas con
+`sh sala/pantallas/mac.sh --instalar tele1 tele2`, cada una con su nombre del
+Max. Lo cuenta `sala/pantallas/README.md`, que vale también para el de 2018.
 
 ## Antes de dejarlo solo
 

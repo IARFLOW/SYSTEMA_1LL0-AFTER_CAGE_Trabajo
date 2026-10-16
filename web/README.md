@@ -55,7 +55,7 @@ npm run dev          # servidor + simulador de sala en http://localhost:8080
 - `http://localhost:8080/screen/tele1` → la página de la pantalla `tele1`. Hay una por pantalla, con el nombre que use el Max.
 - `http://localhost:8080/health` → estado en texto plano.
 - `npm run max` → un Max de prueba que manda la escena de ejemplo del patch de Juanlu.
-- `npm test` → 65 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout y las versiones, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana y las de vídeo ffmpeg, y si no están, se saltan solas.
+- `npm test` → 102 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
 
 `npm start` arranca como en la sala, sin simulador. Ahí `/dev` y su API no
 existen, porque cualquiera en la Wi-Fi de la sala podría encender conceptos a
@@ -154,7 +154,7 @@ por UDP a un solo puerto, el 9100, y cada mensaje dice a qué pantalla va.
 - Cada mensaje es un disparo, así que el mismo número otra vez vuelve a empezar el vídeo.
 - Si el Max no manda el 0, el verde se apaga solo cuando acaba el vídeo. Al acabar, la pantalla se queda en negro y no repite.
 - Un número que no está en la hoja deja la pantalla en negro y lo apunta en el registro. Una dirección que no entiende, como una errata en el patch, la apunta una sola vez.
-- Con la lista de pantallas de la sala (`PANTALLAS=tele1,tele2,tele3`, que pone el instalador del Mac), si el Max manda a un nombre que no está en ella, el panel lo avisa, porque suele ser una errata (`/tel3/video`) y esa tele se quedaría en negro.
+- Con la lista de pantallas de la sala (`PANTALLAS=tele1,tele2,monitor1,monitor2,proyector1,proyector2`, que pone el instalador del Mac), si el Max manda a un nombre que no está en ella, el panel lo avisa, porque suele ser una errata (`/tel3/video`) y esa tele se quedaría en negro.
 - Por defecto solo acepta mensajes de este mismo ordenador (`127.0.0.1`), porque en la sala el Max y el servidor van juntos en tu M4. Si el Max va en otro ordenador, se arranca con `OSC_HOST=0.0.0.0 npm start`, y para otro puerto está `OSC_PORT`.
 - Si el 9100 ya lo tiene otro programa, el servidor lo dice al arrancar, en el panel y en `/health` (`osc SIN PUERTO`), en vez de repartirse con él los mensajes sin avisar. Lo vuelve a intentar cada 10 s, y en cuanto el otro lo suelta lo coge sin reiniciar nada.
 
@@ -180,7 +180,7 @@ su versión del vídeo, `tablet` en lo táctil y `monitor` en lo demás
 
 - En un iPad, una tablet o un móvil hay que tocar la pantalla una vez al encenderla (el «toque diario»), porque sin un toque ningún navegador deja sonar un vídeo. Hasta entonces pone los vídeos sin sonido y lo pide abajo a la izquierda, y el panel dice «sin activar». El mismo toque la pone a pantalla completa. Una recarga lo olvida, también la que se manda desde el panel, y después hay que volver a tocarla. En el iPad, sin HTTPS una web no puede impedir que la pantalla se apague, así que el Bloqueo automático va en «Nunca» en Ajustes > Pantalla y brillo y también en los ajustes de Acceso guiado, que tiene el suyo (Apple, soporte 111795). Con Acceso guiado nadie se sale de Safari. Se empieza con un triple clic en el botón de inicio, y para salir hace falta su código. El modo de bajo consumo tiene que ir apagado, porque con él el iPad se bloquea a los 30 s.
 - Las Raspberry van con Chromium en modo quiosco, que suena sin toque. Cómo se prepara cada una está en `sala/raspberry/`.
-- En las pantallas por HDMI al Mac, si los vídeos los pone el Max directamente, el servidor solo necesita su `/teleN/video` para que el mapa se entere. Si van con una ventana de Chrome a pantalla completa en cada monitor, Chrome tiene que abrirse con `--autoplay-policy=no-user-gesture-required` o pedirá un clic para sonar.
+- Las pantallas por cable a un ordenador (tu M4, el de 2018 o el de Guille) van cada una con su ventana de Chrome a pantalla completa, y las abre solas `sala/pantallas/`, en un Mac o en Windows. Ya arranca Chrome con `--autoplay-policy=no-user-gesture-required`, que si no pediría un clic para sonar. Si alguna la pusiera el Max directamente, el servidor solo necesita su `/teleN/video` para que el mapa se entere.
 
 ### El panel de la sala
 
@@ -208,7 +208,7 @@ es lo que hace.
 - Lo que provoca la red se apunta en el registro con tope, 60 líneas por minuto y luego cuántas se han callado, y sin caracteres de control. Una inundación llegó a escribir 214 MB en 10 s, que en una noche es el disco entero del Mac.
 - Lo que «ve» un móvil se apaga solo al acabar el vídeo, con un margen, aunque el móvil no avise. Así un script no puede dejar el mapa de todos en magenta durante días.
 - Desde este mismo ordenador no hay tope por IP, para poder hacer pruebas de carga (`LIMITAR_LOCAL=1` lo activa también aquí).
-- `/health` da el detalle (pantallas, las que faltan, móviles, versión, desde cuándo corre, memoria) solo a este ordenador. A los demás, «ok».
+- `/health` da el detalle (pantallas, las que faltan, móviles, versión, desde cuándo corre, memoria) solo a este ordenador. A los demás, «ok», y con `?pantallas` también qué pantallas tienen su página abierta, que es lo que mira `sala/pantallas/` para abrir otra vez una pestaña caída.
 - El simulador `/dev` no está dentro de `public/`, así que en la sala no existe, se escriba como se escriba la dirección.
 
 El registro lleva día y hora en cada línea (`01/10 18:05:03`), y al arrancar
@@ -278,8 +278,9 @@ El servidor arranca solo en tu Mac con `sala/mac/instalar.sh`. Va en el puerto
 80, se levanta solo si se cae y no deja que el Mac se duerma.
 `sala/mac/comprobar.sh` dice si el Mac está listo para quedarse solo varios
 días (tapa, reposo, salvapantallas, FileVault, cortafuegos…), y
-`sala/mac/README.md` lo cuenta todo con su porqué. Para las Raspberry,
-`sala/raspberry/`, y para el router, `sala/router/`.
+`sala/mac/README.md` lo cuenta todo con su porqué. Para las pantallas por
+cable, `sala/pantallas/`, para las Raspberry, `sala/raspberry/`, y para el
+router, `sala/router/`.
 
 ## Estructura
 
@@ -307,6 +308,7 @@ web/
 ├── server/index.js  Express 5 + ws + OSC: la web, los vídeos con rango, el WebSocket /ws y el Max
 ├── sala/
 │   ├── mac/         instalar, comprobar, estado y desinstalar el servidor en el Mac de la sala
+│   ├── pantallas/   que las pantallas por cable se abran solas, en un Mac o en Windows
 │   ├── raspberry/   preparar cada Raspberry
 │   └── router/      qué tiene que permitir el router y cómo se comprueba
 ├── estado/          lo que pone cada pantalla, para seguir tras un reinicio (fuera de git)
@@ -361,6 +363,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - El panel `/panel`, con las pantallas que faltan (`PANTALLAS`), «identificar» y «recargar», los avisos y lo que llega del Max.
 - El servidor aguanta lo que le mande un visitante, con límites que no nota nadie, y contesta las comprobaciones de conectividad de los móviles.
 - El arranque solo en el Mac de la sala (`sala/mac/`), con la comprobación de los ajustes del Mac.
+- Las pantallas por cable se abren solas en cada ordenador, en un Mac o en Windows, se reabren si se cierran, y si su pantalla se apaga se cierran y vuelven cuando se enciende (`sala/pantallas/`).
 - Los vídeos se buscan en `media/` en vivo, con sus versiones, y `npm run versiones` las saca de los masters.
 - Los carteles con su QR y la prueba de carga.
 
@@ -368,7 +371,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 
 - Lo probé en móviles reales el 23-09-2026, con un MP4 de prueba, en un iPhone (Safari) y un Android (Chrome 153). Suena desde el primer toque, «← mapa» y el «atrás» de Android vuelven al mapa en el mismo sitio, girar el móvil conserva el mapa, quitar la Wi-Fi para el vídeo, avisa y reconecta, y bloquear el móvil o salir de Chrome lo para. Con los dos a la vez, lo que se enciende en uno se enciende en el otro al instante. Los gestos ya los había comprobado el 22-09-2026 en iPhone, Android y Windows.
 - Lo del Max y las pantallas, con las pruebas de `npm test` y en Chrome con la escena de ejemplo. Abrí una pantalla como si fuera un iPad (sin sonido hasta el toque), otra como una Raspberry (suena sin toque), el móvil y el panel, y congelé el servidor 27 s. En ese rato la pantalla avisa sin cortar lo que pone, y al volver sigue sin empezar de nuevo.
-- 65 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 03-10-2026).
+- 102 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 16-10-2026, las de Windows con PowerShell 7 en el Mac).
 
 Hay capturas en `docs/` (`captura-mapa.jpg` en oscuro, `captura-mapa-claro.jpg`
 y `captura-video.jpg`). Son del 22-09-2026, todavía con puntos en vez de

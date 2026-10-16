@@ -689,6 +689,26 @@ test('/health da el detalle solo a este ordenador, y el registro lleva fecha', a
   assert.ok(srv.out.some((l) => /^\d{2}\/\d{2} \d{2}:\d{2}:\d{2} /.test(l)), 'las líneas empiezan por día y hora');
 });
 
+test('/health?pantallas dice a cualquiera qué pantallas tienen su página abierta, y nada más', async () => {
+  const lan = Object.values(networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal);
+  const host = lan ? lan.address : '127.0.0.1';
+  const t = screen('tele7');
+  await t.next(isSnapshot);
+  try {
+    const conTele = await (await fetch(`http://${host}:${http}/health?pantallas`)).text();
+    assert.match(conTele, /^displays .*\btele7\b/m);
+    if (lan) assert.match(conTele, /^ok\ndisplays [^\n]+$/, 'desde otra IP, solo «ok» y la lista');
+  } finally {
+    t.close();
+  }
+  // Al cerrarse la página, sale de la lista.
+  for (let i = 0; i < 30; i += 1) {
+    if (!/\btele7\b/.test(await (await fetch(`http://${host}:${http}/health?pantallas`)).text())) return;
+    await sleep(100);
+  }
+  assert.fail('tele7 sigue en la lista después de cerrar su página');
+});
+
 // ---------------------------------------------------------------------------
 // Los vídeos se buscan en media/ en vivo, con las versiones de cada aparato,
 // sin mirar mayúsculas ni cómo se guardó la tilde, y con la duración leída del

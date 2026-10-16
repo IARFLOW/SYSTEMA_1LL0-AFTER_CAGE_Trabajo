@@ -557,7 +557,14 @@ app.get('/panel', (req, res) => {
 // las pruebas, quien vigile la sala desde el Mac). A los demás les dice «ok».
 app.get('/health', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  if (!isLocal(req.socket.remoteAddress)) { res.type('text').send('ok'); return; }
+  // Con ?pantallas, también a los demás qué pantallas tienen su página abierta,
+  // y nada más. Es lo que mira el arrancador de cada ordenador para abrir otra
+  // vez una pestaña caída, que con Chrome vivo no se nota desde fuera.
+  if (!isLocal(req.socket.remoteAddress)) {
+    const abiertas = 'pantallas' in req.query ? `\ndisplays ${[...state.displays.keys()].join(' ') || '-'}` : '';
+    res.type('text').send(`ok${abiertas}`);
+    return;
+  }
   const displays = [...state.displays.keys()];
   const uptime = Math.round(process.uptime());
   res.type('text').send([

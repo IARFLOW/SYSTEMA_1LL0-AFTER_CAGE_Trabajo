@@ -31,6 +31,7 @@ Cada vez que cambie algo lo subo aquí.
 
 - tal cual lo tienes Juanlu, mandando a 127.0.0.1 al 9100, que el servidor va en el mismo mac
 - cada pestaña de /screen es una tele. la arrastras al monitor que quieras y haces clic una vez dentro, que así suena y se pone a pantalla completa (con Esc sale)
+- pa las pantallas por cable de la sala ya no hace falta arrastrarlas, `web/sala/pantallas` abre cada una a pantalla completa en su sitio y la vuelve a poner si se desenchufa y se enchufa otra vez. cómo se usa lo tenéis en su README
 - en /panel ves cada mensaje que llega del max y qué ha hecho el servidor con él, así que si algo no cuadra se ve al momento
 - ahí también sale cada tele, lo que está poniendo y si suena o le falta el toque, y con identificar sale su nombre en grande en esa pantalla, pa saber cuál es cuál cuando tengas varias
 - si quieres poner vídeos a mano sin el max, en /dev eliges qué pone cada tele
@@ -77,4 +78,4 @@ npm run layout
 ## Lo demás
 
 - lo técnico con todo el detalle está en `web/README.md`, por si os pica la curiosidad
-- las guías de la sala están en `web/sala`, la del mac (`mac/README.md`), la del router (`router/README.md`) y la de las raspberry (`raspberry/README.md`), por si al final hacen falta
+- las guías de la sala están en `web/sala`, la de las pantallas por cable (`pantallas/README.md`), la del mac (`mac/README.md`), la del router (`router/README.md`) y la de las raspberry (`raspberry/README.md`), por si al final hacen falta

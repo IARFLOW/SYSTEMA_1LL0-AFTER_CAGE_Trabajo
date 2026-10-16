@@ -3,7 +3,7 @@
 #
 #   sh sala/mac/instalar.sh                  lo instala y lo arranca, con la web en el 80 y Max en el 9100
 #   sh sala/mac/instalar.sh --puerto 8080    con la web en otro puerto (para probarlo en casa)
-#   sh sala/mac/instalar.sh --pantallas tele1,tele2,tele3
+#   sh sala/mac/instalar.sh --pantallas tele1,tele2,monitor1,monitor2,proyector1,proyector2
 #                                            las pantallas de la sala, con el nombre que usa Max,
 #                                            y el panel dirá cuál falta aunque no se haya encendido
 #   sh sala/mac/instalar.sh --clave-panel unaclavelarga
