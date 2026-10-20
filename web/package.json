@@ -12,6 +12,7 @@
     "max": "node scripts/max-de-prueba.mjs",
     "versiones": "node scripts/versiones.mjs",
     "carteles": "node scripts/carteles.mjs",
+    "qr-pantallas": "node scripts/qr-pantallas.mjs",
     "carga": "node scripts/carga.mjs"
   },
   "keywords": [],

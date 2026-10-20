@@ -55,7 +55,7 @@ npm run dev          # servidor + simulador de sala en http://localhost:8080
 - `http://localhost:8080/screen/tele1` → la página de la pantalla `tele1`. Hay una por pantalla, con el nombre que use el Max.
 - `http://localhost:8080/health` → estado en texto plano.
 - `npm run max` → un Max de prueba que manda la escena de ejemplo del patch de Juanlu.
-- `npm test` → 105 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
+- `npm test` → 112 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
 
 `npm start` arranca como en la sala, sin simulador. Ahí `/dev` y su API no
 existen, porque cualquiera en la Wi-Fi de la sala podría encender conceptos a
@@ -172,7 +172,14 @@ que no salta si cambia la hora del Mac.
 Cada aparato abre en su navegador `http://systema.internal/screen/tele1` en la
 sala (o la IP del Mac), con el mismo nombre que usa el Max. Pone lo que le
 llega a pantalla completa y sin cursor, y se queda en negro cuando no pone
-nada. Si se abre o se reconecta a mitad de un vídeo, entra por donde va. Si se
+nada. Si se abre o se reconecta a mitad de un vídeo, entra por donde va. Las
+que ponen el mismo vídeo van clavadas. Cada una mide su reloj contra el del
+servidor y, si se separa, acelera o frena un poco hasta volver, o salta si se
+ha ido más de 0,3 s, así que la que tarda en cargar o se atasca a mitad no se
+queda detrás. En Chrome, con una de dos cargando 1,5 s tarde, quedaron a entre
+0 y 20 ms en diez rondas (20-10-2026). Cada una va con la hora de su disparo,
+así que los mensajes del Max para varias pantallas tienen que salir a la vez,
+en la misma línea de la coll o en un bundle. Si se
 corta la Wi-Fi, lo que está poniendo sigue, avisa abajo a la izquierda y
 reconecta sola. Se recupera sola de un vídeo atascado o de un error de red,
 también si la red falla justo cuando el Max dispara (reintenta mientras dure el
@@ -233,6 +240,22 @@ durante el vídeo), y el iPad depende de su Bloqueo automático en «Nunca».
 - En la sala el servidor va en el puerto 80, para que la dirección no lleve número y quede en `http://systema.internal/`. El router tiene que mandar ese nombre a la IP del Mac. Si el router no deja dar nombres, el QR del mapa va directo a la IP y funciona igual. Qué tiene que permitir el router y cómo se comprueba está en `sala/router/`.
 - El riesgo más alto que he encontrado está en Android. Con los datos móviles encendidos, la Wi-Fi sin internet no pasa a ser la red del móvil hasta que se acepta el aviso de «esta red no tiene internet», y mientras tanto el navegador sale por los datos y la web no abre (lo miré en el código de Android). Por eso el primer cartel dice que se acepte el aviso y el segundo, que se apaguen los datos si no abre. Hay que probarlo con un Android de verdad en la red de la sala.
 - Al unirse a una Wi-Fi, los móviles hacen sus comprobaciones de conectividad. El iPhone pide `captive.apple.com/hotspot-detect.html` y Android `…/generate_204`. Sin internet nadie contesta, y el iPhone abre una ventanita de portal cautivo. El servidor contesta lo que esperan (también a Windows y Firefox), siempre que el DNS del router mande esos nombres al Mac y el servidor vaya en el 80. Con las de Apple el iPhone debería dar la red por buena, pero no lo he probado. Apple declara esa comprobación también por el 443, y qué hace el iPhone si el 80 contesta y el 443 no, no lo dice nadie. Las de Android no se pueden engañar del todo (su prueba por HTTPS a Google siempre falla sin internet), y falsearlas cambia qué aviso sale, no si sale.
+### Los móviles de los músicos
+
+Para las vídeo-partituras del 29-10-2026, cada móvil es una pantalla más, de
+`musico1` a `musico10`, y el Max les manda `/musico1/video 3` como a las teles.
+Van clavados entre ellos, como las demás pantallas.
+
+`npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10`, con la IP
+del Mac en la sala, deja en `carteles/` una hoja con un QR por móvil, en HTML y
+en PDF, y cada QR suelto en SVG. Cada músico escanea el suyo y se le abre su
+página. Vale para cualquier pantalla con nombre, como un iPad que hace de tele
+(`npm run qr-pantallas -- --web … tele1 monitor2`).
+
+- Para que el móvil no se apague, mientras espera en negro la página pone debajo un vídeo negro de 10 s en marcha (`public/despierta.mp4`, con una pista de silencio), solo en lo táctil. Chrome no deja apagarse la pantalla con un vídeo en marcha que la ocupe, aunque vaya sin sonido, y la partitura ya lo hace sola. Safari solo si el vídeo tiene sonido y suena, así que en iPhone el negro suena en silencio desde el toque, y sigue debajo si la partitura no tiene sonido. En un móvil de verdad está por probar, así que el bloqueo automático, lo más largo que deje cada móvil.
+- Si el vídeo suena, un toque al abrir la página. En iPhone hace falta igualmente, para que no se apague.
+- Si el Mac de la sala tiene puesta la lista de pantallas (`PANTALLAS`), los `musico` van también en ella, o el panel avisa de que no están.
+
 - Safari 18.2 o más nuevo prueba primero `https` y, si falla, cae a `http`. Si el Mac rechaza el 443 al momento no se nota. Con el modo encubierto del cortafuegos activado tarda unos 3 s la primera vez (lo avisa el instalador).
 
 ### Los carteles
@@ -295,6 +318,7 @@ web/
 │   ├── layout.mjs         CSV → map.json y contents.json (d3-force, una vez, fuera del móvil)
 │   ├── versiones.mjs      masters → las versiones de cada aparato (ffmpeg)
 │   ├── carteles.mjs       los dos carteles con su QR
+│   ├── qr-pantallas.mjs   una hoja con un QR por pantalla (los móviles de los músicos)
 │   ├── carga.mjs          la prueba de carga
 │   ├── max-de-prueba.mjs  un Max de mentira: manda por OSC la escena del patch
 │   ├── build.mjs          empaqueta d3-zoom en public/js/vendor.js y copia las fuentes
@@ -368,13 +392,15 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - Las pantallas por cable se abren solas en cada ordenador, en un Mac o en Windows, se reabren si se cierran, y si su pantalla se apaga se cierran y vuelven cuando se enciende (`sala/pantallas/`).
 - Los vídeos se buscan en `media/` en vivo, con sus versiones, y `npm run versiones` las saca de los masters.
 - Las relaciones salen solas de la sección, el proceso y el medio de cada concepto, en nube y no todos con todos, y cada tipo con su línea (continua, discontinua y punteada).
-- Los carteles con su QR y la prueba de carga.
+- Las pantallas con el mismo vídeo van clavadas, con el reloj del servidor, aunque una cargue tarde o se atasque a mitad (20-10-2026, para las vídeo-partituras de los músicos).
+- Un móvil o una tablet que espera en negro no apaga la pantalla, con un vídeo negro en marcha por debajo (20-10-2026, probado en Chrome sin ventana, falta en un móvil de verdad).
+- Los carteles con su QR, la hoja de QR de las pantallas y la prueba de carga.
 
 **Probado**
 
 - Lo probé en móviles reales el 23-09-2026, con un MP4 de prueba, en un iPhone (Safari) y un Android (Chrome 153). Suena desde el primer toque, «← mapa» y el «atrás» de Android vuelven al mapa en el mismo sitio, girar el móvil conserva el mapa, quitar la Wi-Fi para el vídeo, avisa y reconecta, y bloquear el móvil o salir de Chrome lo para. Con los dos a la vez, lo que se enciende en uno se enciende en el otro al instante. Los gestos ya los había comprobado el 22-09-2026 en iPhone, Android y Windows.
 - Lo del Max y las pantallas, con las pruebas de `npm test` y en Chrome con la escena de ejemplo. Abrí una pantalla como si fuera un iPad (sin sonido hasta el toque), otra como una Raspberry (suena sin toque), el móvil y el panel, y congelé el servidor 27 s. En ese rato la pantalla avisa sin cortar lo que pone, y al volver sigue sin empezar de nuevo.
-- 105 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 19-10-2026, las de Windows con PowerShell 7 en el Mac).
+- 112 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 20-10-2026, las de Windows con PowerShell 7 en el Mac).
 
 Hay capturas en `docs/` (`captura-mapa.jpg` en oscuro, `captura-mapa-claro.jpg`
 y `captura-video.jpg`). Son del 22-09-2026, todavía con puntos en vez de

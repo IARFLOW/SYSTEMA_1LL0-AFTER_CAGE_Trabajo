@@ -129,6 +129,7 @@ function stopVideo() {
 
 function blank() {
   clearInterval(clipTimer);
+  video.playbackRate = 1;
   clearTimeout(stallTimer);
   clearTimeout(retryTimer);
   waiting = false;
@@ -150,12 +151,85 @@ function start() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// El reloj de la sala. Para que varias pantallas vayan clavadas (las
+// vídeo-partituras de los músicos, el 29-oct-2026), cada una mide cuánto se
+// lleva su reloj con el del servidor, como hace el NTP. Pregunta la hora y,
+// de las últimas respuestas, se fía de la que tardó menos en volver, que es
+// la que trae menos error. Hasta tener una, cuenta desde que le llegó el
+// disparo, como antes, y eso arrastra lo que tardara el mensaje.
+// ---------------------------------------------------------------------------
+let offset = null;   // reloj del servidor menos el de aquí, en ms
+let samples = [];    // { rtt, offset } de las últimas 8 respuestas
+let clockTimer = null;
+function askTime() {
+  if (sock?.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: 'time', c: performance.now() }));
+}
+function onTime(msg) {
+  const rtt = performance.now() - msg.c;
+  if (!(rtt >= 0) || !Number.isFinite(msg.s)) return;
+  samples.push({ rtt, offset: msg.s - (msg.c + rtt / 2) });
+  if (samples.length > 8) samples.shift();
+  offset = samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
+}
+// Al conectar, cinco preguntas seguidas para tener pronto una buena, y luego
+// una cada 5 s, porque los relojes se van separando poco a poco. Con un
+// socket nuevo se empieza de cero, que el servidor puede ser otro.
+function startClock() {
+  clearInterval(clockTimer);
+  offset = null;
+  samples = [];
+  for (let i = 0; i < 5; i += 1) setTimeout(askTime, i * 250);
+  clockTimer = setInterval(askTime, 5000);
+}
+
 // Por dónde va el disparo actual, en segundos.
-const elapsed = () => (current ? (performance.now() - current.t0) / 1000 : 0);
+function elapsed() {
+  if (!current) return 0;
+  if (offset !== null && Number.isFinite(current.start)) return (performance.now() + offset - current.start) / 1000;
+  return (performance.now() - current.t0) / 1000;
+}
+
+// ---------------------------------------------------------------------------
+// Al compás. Cada cuarto de segundo se mira cuánto se separa el vídeo de por
+// dónde va el disparo. Hasta 0,3 s lo corrige acelerando o frenando un poco,
+// que no se nota, y con más salta. Un salto tarda en un móvil, así que se
+// apunta cuánto se quedó corto y el siguiente salta ese tanto más allá.
+// ---------------------------------------------------------------------------
+const SALTO = 0.3;     // s a partir de los que salta en vez de acelerar
+const CLAVADO = 0.01;  // s por debajo de los que se deja a velocidad normal
+let lead = 0.1;        // s que tarda en saltar esta pantalla, medido en cada salto
+let seekAt = 0;
+let afterSeek = false;
+function keepPace() {
+  if (!current?.file || video.paused || video.seeking || video.readyState < 3 || !Number.isFinite(video.duration)) return;
+  const want = elapsed();
+  if (want < 0 || want >= video.duration) return;
+  const ahead = video.currentTime - want;
+  if (afterSeek) {
+    afterSeek = false;
+    if (Math.abs(ahead) < 1) lead = Math.min(1, Math.max(0, lead - ahead));
+  }
+  if (Math.abs(ahead) > SALTO) {
+    // Como mucho un salto cada 2 s. Con la Wi-Fi floja, saltar sin parar
+    // la deja cargando todo el rato.
+    if (performance.now() - seekAt < 2000) return;
+    seekAt = performance.now();
+    afterSeek = true;
+    video.playbackRate = 1;
+    video.currentTime = Math.min(want + lead, video.duration);
+    return;
+  }
+  video.playbackRate = Math.abs(ahead) < CLAVADO ? 1 : 1 - Math.max(-0.1, Math.min(0.1, ahead * 0.8));
+}
+setInterval(() => { keepPace(); awakeTick(); }, 250);
 
 // Carga (o recarga) el vídeo actual entrando por donde va.
 function load(join) {
   current.join = join;
+  video.playbackRate = 1;
+  seekAt = 0;
+  afterSeek = false;
   clip.hidden = true;
   video.hidden = false;
   video.src = fileOf(current);   // el mismo otra vez también vuelve a empezar
@@ -175,6 +249,10 @@ function show(v) {
   // disparos en el mismo milisegundo la compartían.
   const id = v.shot ?? v.since;
   if (current && current.shotId === id) {
+    // Con un servidor reiniciado, el mismo disparo llega con su inicio en el
+    // reloj nuevo.
+    current.start = v.start;
+    current.t0 = performance.now() - v.at * 1000;
     // …salvo que el vídeo se haya quedado parado o con error mientras tanto
     // (la Wi-Fi se fue a mitad de la descarga), y entonces se recarga por donde va.
     if (current.file && (video.error || (video.paused && !video.ended) || video.readyState < 2)) load(true);
@@ -209,11 +287,14 @@ function show(v) {
 }
 
 // Una página que se conecta a mitad de un vídeo entra por donde va. Un
-// disparo nuevo empieza desde el principio aunque tarde en cargar.
+// disparo nuevo también, si ha tardado en cargar más de una décima, para ir
+// al compás de las demás desde el principio. Hasta el 20-10-2026 empezaba
+// desde el principio, y la que tardaba iba detrás hasta que la corregía el
+// compás.
 video.addEventListener('loadedmetadata', () => {
-  if (!current?.join) return;
+  if (!current) return;
   const at = elapsed();
-  if (at < video.duration) video.currentTime = at;
+  if ((current.join || at > 0.1) && at < video.duration) video.currentTime = at;
 });
 video.addEventListener('ended', () => { current = null; blank(); report(); });
 video.addEventListener('playing', () => { lastError = null; waiting = false; report(); });
@@ -268,6 +349,47 @@ video.addEventListener('timeupdate', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Que no se apague. Un móvil o una tablet apaga la pantalla a los pocos
+// minutos (un Samsung no deja más de 10), y sin HTTPS una web no puede pedir
+// que no lo haga. Lo que sí respetan los navegadores es un vídeo en marcha.
+// Chrome no la deja apagarse mientras uno ocupe buena parte de ella, aunque
+// vaya sin sonido. Safari solo si tiene pista de sonido, suena y no va en
+// bucle (video_wake_lock.cc de Chromium y shouldDisableSleep de WebKit,
+// leídos el 20-10-2026). Así que cuando el vídeo de verdad no lo hace, debajo
+// de él va uno negro de 10 s con una pista de silencio, que se vuelve a
+// empezar al acabar. En Safari suena (en silencio) desde el toque, y en lo
+// demás va sin sonido, para que Android no saque su aviso de «reproduciendo».
+// Solo en lo táctil. Las teles por cable y las Raspberry no se apagan solas.
+// ---------------------------------------------------------------------------
+const awake = $('awake');
+const SAFARI = navigator.vendor === 'Apple Computer, Inc.';
+if (TOUCH) {
+  awake.src = '/despierta.mp4';
+  awake.hidden = false;
+}
+// Si el vídeo de verdad ya la mantiene encendida. En Safari, el de silencio
+// no puede sonar a la vez que uno que suena, porque en iPhone empezar uno con
+// sonido para al otro (ConcurrentPlaybackNotPermitted). Hasta que el de
+// verdad dice si tiene sonido, se cuenta como que sí.
+function mainKeepsAwake() {
+  if (video.hidden || video.paused || video.ended) return false;
+  if (!SAFARI) return true;
+  if (video.readyState < 1) return true;
+  return !video.muted && video.volume > 0 && !(video.audioTracks && video.audioTracks.length === 0);
+}
+function awakeTick() {
+  if (!TOUCH || document.hidden) return;
+  if (mainKeepsAwake()) {
+    if (!awake.paused) awake.pause();
+    return;
+  }
+  awake.muted = !(SAFARI && sound);
+  if (awake.paused) awake.play().catch(() => {});
+}
+// Al acabar, play() lo vuelve a empezar desde el principio.
+awake.addEventListener('ended', awakeTick);
+
+// ---------------------------------------------------------------------------
 // El toque de encendido da sonido, pantalla completa y que no se apague
 // ---------------------------------------------------------------------------
 let lock = null;
@@ -299,6 +421,8 @@ function touch() {
     report();
   }
   keepAwake();
+  // Dentro del toque, para que Safari deje sonar también al de silencio.
+  awakeTick();
   // La pantalla completa va la última, porque pedirla gasta la activación del
   // toque, y un play() que viniera detrás ya no contaría como nacido de él.
   fullscreen();
@@ -366,6 +490,7 @@ function connect() {
     // Con un socket nuevo, el servidor no sabe nada de esta pantalla todavía.
     lastReport = '';
     s.send(JSON.stringify({ type: 'hello', role: 'screen', name }));
+    startClock();
   });
   s.addEventListener('message', (ev) => {
     let msg;
@@ -380,6 +505,7 @@ function connect() {
       status();
     }
     if (msg.type === 'snapshot' || msg.type === 'video') show(msg.video);
+    if (msg.type === 'time') onTime(msg);
     if (msg.type === 'identify') identify(msg.seconds);
     if (msg.type === 'reload') location.reload();
     if (msg.type === 'snapshot') report();

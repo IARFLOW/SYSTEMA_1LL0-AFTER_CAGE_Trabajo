@@ -657,6 +657,9 @@ function nowPlaying(screen) {
     id: item.id, label: item.label, file: item.file, files: item.files, duration: item.duration, num: item.num,
     since: state.since.get(screen), shot: state.shot.get(screen),
     at: (performance.now() - state.t0.get(screen)) / 1000,
+    // Cuándo empezó, en el reloj de este servidor. Con la hora que le da
+    // `time`, la pantalla sabe por dónde va sin contar lo que tardó el mensaje.
+    start: state.t0.get(screen),
   };
 }
 
@@ -965,6 +968,12 @@ function onMessage(ws, msg, ip, addr) {
     }
     ws.lastError = ws.status.error;
     roomChanged();
+    return;
+  }
+  // La pantalla pregunta la hora para ir al compás de las demás (el reloj de
+  // screen.js). Se le devuelve su marca tal cual, con la del servidor al lado.
+  if (ws.role === 'screen' && msg.type === 'time') {
+    if (Number.isFinite(msg.c)) ws.send(JSON.stringify({ type: 'time', c: msg.c, s: performance.now() }));
     return;
   }
   // El panel pide identificar o recargar una pantalla (o todas).

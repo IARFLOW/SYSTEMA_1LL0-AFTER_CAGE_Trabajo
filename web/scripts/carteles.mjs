@@ -126,15 +126,15 @@ export function svgDeQr(texto) {
 // Los carteles van en papel blanco y tinta negra, en el registro de la web
 // (Space Mono, regla punteada, marcas de esquina) y no en otro.
 // ---------------------------------------------------------------------------
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function fuentes() {
+export function fuentes() {
   const f = (peso) => readFileSync(join(root, 'public', 'fonts', `space-mono-${peso}.woff2`)).toString('base64');
   return `@font-face{font-family:'Space Mono';font-weight:400;src:url(data:font/woff2;base64,${f(400)}) format('woff2')}
 @font-face{font-family:'Space Mono';font-weight:700;src:url(data:font/woff2;base64,${f(700)}) format('woff2')}`;
 }
 
-const TILDE = '<svg class="tilde" viewBox="0 0 22 10" aria-hidden="true"><path d="M1 6.5c2.5-5 5.5-5 8 0s5.5 5 8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+export const TILDE = '<svg class="tilde" viewBox="0 0 22 10" aria-hidden="true"><path d="M1 6.5c2.5-5 5.5-5 8 0s5.5 5 8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 
 // `apilado` pone cada dato debajo de su etiqueta, para que una dirección larga
 // quepa entera en una línea. `respaldo` es un QR pequeño abajo a la derecha.
@@ -197,7 +197,7 @@ ${respaldo ? `<figure class="respaldo">${respaldo.qr}<figcaption>${esc(respaldo.
 `;
 }
 
-function chrome() {
+export function chrome() {
   const candidatos = [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -212,7 +212,7 @@ function chrome() {
 // seguidas chocaban por su bloqueo). Y sin esperar a que se cierre solo. Con
 // un perfil nuevo escribe el PDF y se queda abierto (medido el 1-oct-2026 en
 // macOS 26), así que se cierra en cuanto dice que ha escrito el fichero.
-function imprimir(c, html, pdf) {
+export function imprimir(c, html, pdf) {
   const perfil = mkdtempSync(join(tmpdir(), 'carteles-chrome-'));
   return new Promise((ok, mal) => {
     const p = spawn(c, ['--headless=new', `--user-data-dir=${perfil}`, '--use-mock-keychain', '--no-first-run',

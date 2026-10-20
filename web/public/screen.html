@@ -91,6 +91,9 @@
   </style>
 </head>
 <body>
+  <!-- Debajo del vídeo de verdad, el que deja la pantalla encendida en un
+       móvil mientras espera en negro (ver «Que no se apague» en screen.js). -->
+  <video id="awake" playsinline muted preload="auto" disablepictureinpicture hidden></video>
   <!-- preload="auto", porque en la sala la red es local y una pantalla pone un
        vídeo entero. Mejor que baje de golpe que a trompicones. -->
   <video id="video" playsinline preload="auto" disablepictureinpicture hidden></video>

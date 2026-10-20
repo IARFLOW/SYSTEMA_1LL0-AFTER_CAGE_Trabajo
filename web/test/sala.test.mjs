@@ -239,6 +239,33 @@ test('una pantalla que se abre a mitad de un vídeo entra por donde va', async (
   s.close();
 });
 
+// Para ir clavadas (el reloj de screen.js), cada pantalla pregunta la hora y
+// sabe en qué hora del servidor empezó cada disparo.
+test('una pantalla pregunta la hora y sabe cuándo empezó el disparo en el reloj del servidor', async () => {
+  const c = take();
+  const s = screen('musico1');
+  await s.next(isSnapshot);
+  const hora = async (marca) => {
+    const r = s.next((m) => m.type === 'time');
+    s.ws.send(JSON.stringify({ type: 'time', c: marca }));
+    return r;
+  };
+  const antes = await hora(1234.5);
+  assert.equal(antes.c, 1234.5, 'le devuelve su marca tal cual');
+  const got = s.next(isVideo);
+  await max.send('/musico1/video', c.num);
+  const { video } = await got;
+  const despues = await hora(1);
+  assert.ok(video.start > antes.s && video.start < despues.s, `empezó entre las dos horas (${antes.s} < ${video.start} < ${despues.s})`);
+  // Una marca que no es un número no tiene respuesta.
+  s.ws.send(JSON.stringify({ type: 'time', c: 'ya' }));
+  await assert.rejects(s.next((m) => m.type === 'time', 500));
+  const off = s.next(isVideo);
+  await max.send('/musico1/video', 0);
+  await off;
+  s.close();
+});
+
 test('al acabar el vídeo se apaga en el mapa aunque Max no mande el 0', { timeout: 30000 }, async () => {
   const c = numbered.shift();                // el más corto
   const p = phone();

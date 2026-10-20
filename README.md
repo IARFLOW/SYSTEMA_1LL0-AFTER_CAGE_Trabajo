@@ -47,6 +47,22 @@ Cada vez que cambie algo lo subo aquí.
 - si el mac os pregunta si deja a node aceptar conexiones, decidle que sí
 
 
+## Los móviles de los músicos
+
+- cada móvil es una tele más, de /screen/musico1 a /screen/musico10, y desde el max les mandáis /musico1/video y el número
+- van clavados entre ellos aunque uno cargue tarde o le dé un tirón la wifi, porque cada uno se corrige solo con el reloj del servidor
+- pa eso los mensajes de los músicos tienen que salir a la vez, en la misma línea de la coll
+- pa no teclear la dirección en cada móvil, desde la carpeta web lanzáis esto, con la ip que tenga el mac en la wifi de la sala
+
+```
+npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10
+```
+
+- os deja en `web/carteles` una hoja con un qr pa cada móvil. la imprimís y cada músico escanea el suyo
+- mientras esperan en negro la página no deja que se apague la pantalla, pero en un móvil de verdad está por probar, así que poned el bloqueo automático lo más largo que deje cada uno
+- si las partituras llevan sonido, un toque en la pantalla al abrirla. en iphone hace falta igual, pa que no se apague
+
+
 ## Verla sin instalar nada
 
 - `web/docs/demo.html` con doble clic, que es la web entera en un solo fichero con la sala simulada dentro, y se puede mandar al móvil por AirDrop

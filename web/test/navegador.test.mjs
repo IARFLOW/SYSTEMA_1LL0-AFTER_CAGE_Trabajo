@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Client } from 'node-osc';
+import { Client, Bundle, Message } from 'node-osc';
 import { chrome, launch, mobile, goto } from './cdp.mjs';
 
 const web = fileURLToPath(new URL('..', import.meta.url));
@@ -166,6 +166,95 @@ test('las líneas del proceso van discontinuas y las del medio punteadas, y las 
   assert.equal(await trazo('.link:not(.proceso):not(.medio)'), 'none');
   assert.equal(await trazo('.link.proceso'), '7px, 5px');
   assert.equal(await trazo('.link.medio'), '1.5px, 4px');
+});
+
+// Las vídeo-partituras de los músicos (el 29-oct-2026) van en varios móviles a
+// la vez y tienen que ir clavadas. Antes, cada pantalla empezaba cuando tenía
+// el vídeo cargado, y la que tardaba se quedaba detrás todo el vídeo.
+test('dos pantallas con el mismo vídeo van clavadas, aunque una cargue tarde o se retrase a mitad', { skip, timeout: 60000 }, async (t) => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const espera = (ms) => new Promise((r) => { setTimeout(r, ms); });
+  const [p1, p2] = await Promise.all([launch(), launch()]);
+  try {
+    await goto(p1, `${base}/screen/musico1`);
+    await goto(p2, `${base}/screen/musico2`);
+    // A la segunda, lo primero del vídeo le llega 1,5 s tarde, como a un móvil con mala Wi-Fi.
+    let primera = true;
+    p2.on((m) => {
+      if (m.method !== 'Fetch.requestPaused') return;
+      const sigue = () => p2.send('Fetch.continueRequest', { requestId: m.params.requestId }).catch(() => {});
+      if (primera) { primera = false; setTimeout(sigue, 1500); } else sigue();
+    });
+    await p2.send('Fetch.enable', { patterns: [{ urlPattern: '*/media/*' }] });
+    // Juntos en un paquete, como los manda el Max en una línea de su coll. Uno
+    // detrás de otro, con dos Chrome cargando el ordenador, el segundo salía
+    // hasta 40 ms después, y eso no es desfase de las pantallas.
+    await max.send(new Bundle(new Message('/musico1/video', 1), new Message('/musico2/video', 1)));
+    // Cuánto va la primera por delante de la segunda, en el mismo instante.
+    // Los dos Chrome comparten el reloj del ordenador (timeOrigin).
+    const donde = (p) => p.evaluate(`({ t: document.getElementById('video').currentTime, at: performance.timeOrigin + performance.now() })`);
+    const desfase = async () => {
+      const muestras = [];
+      for (let i = 0; i < 5; i += 1) {
+        const [a, c] = await Promise.all([donde(p1), donde(p2)]);
+        muestras.push(a.t - (c.t + (a.at - c.at) / 1000));
+        await espera(200);
+      }
+      return muestras.sort((x, y) => x - y)[2];
+    };
+    await p2.until(`document.getElementById('video').currentTime > 2`, 15000);
+    await espera(3000);
+    const alCargar = await desfase();
+    assert.ok(Math.abs(alCargar) < 0.1, `la que cargó tarde va ${alCargar.toFixed(3)} s detrás`);
+    // Un tirón a mitad. Se la echa un segundo atrás y tiene que volver sola.
+    await p2.evaluate(`document.getElementById('video').currentTime -= 1`);
+    await espera(4000);
+    const trasElTiron = await desfase();
+    assert.ok(Math.abs(trasElTiron) < 0.1, `tras el tirón va ${trasElTiron.toFixed(3)} s detrás`);
+    t.diagnostic(`desfase al cargar ${Math.round(alCargar * 1000)} ms, tras el tirón ${Math.round(trasElTiron * 1000)} ms`);
+  } finally {
+    await max.send('/musico1/video', 0);
+    await max.send('/musico2/video', 0);
+    await max.close();
+    await Promise.all([p1.close(), p2.close()]);
+  }
+});
+
+// Un móvil apaga la pantalla a los pocos minutos (el Samsung de Guille, a los
+// 10 como mucho). Mientras espera en negro, la mantiene encendida un vídeo
+// negro en marcha, porque con uno en marcha Chrome no la deja apagarse.
+test('un móvil que espera en negro tiene un vídeo en marcha para no apagarse, y una tele no', { skip, timeout: 60000 }, async () => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const res = await fetch(`${base}/despierta.mp4`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'video/mp4');
+  const [m, tele] = await Promise.all([launch(), launch()]);
+  try {
+    await mobile(m);
+    await goto(m, `${base}/screen/musico3`);
+    await goto(tele, `${base}/screen/tele3`);
+    const enMarcha = `(() => { const a = document.getElementById('awake'); return !a.hidden && !a.paused && a.currentTime > 0; })()`;
+    await m.until(enMarcha, 5000);
+    assert.equal(await m.evaluate(`document.getElementById('awake').muted`), true, 'en Chrome va sin sonido, sin aviso de «reproduciendo»');
+    // Llega la partitura, que ya mantiene la pantalla encendida, y el negro se para.
+    await max.send('/musico3/video', 1);
+    await m.until(`!document.getElementById('video').paused && document.getElementById('video').currentTime > 0.5`, 8000);
+    await m.until(`document.getElementById('awake').paused`, 2000);
+    // Acaba, y vuelve el negro en marcha.
+    await max.send('/musico3/video', 0);
+    await m.until(enMarcha, 3000);
+    // Al acabar sus 10 s vuelve a empezar, y no se queda parado.
+    await m.evaluate(`document.getElementById('awake').currentTime = 9.7`);
+    await m.until(`(() => { const a = document.getElementById('awake'); return !a.paused && a.currentTime < 2; })()`, 5000);
+    // En una tele sin pantalla táctil no hace falta.
+    assert.equal(await tele.evaluate(`(() => { const a = document.getElementById('awake'); return a.hidden && a.paused && !a.getAttribute('src'); })()`), true);
+  } finally {
+    await max.send('/musico3/video', 0);
+    await max.close();
+    await Promise.all([m.close(), tele.close()]);
+  }
 });
 
 test('el punto de conexión no usa el verde de «suena en la sala», y los botones van subrayados', { skip }, async () => {
