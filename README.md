@@ -66,6 +66,10 @@ npm run layout
 
 - recargáis y ya sale. si algo no cuadra os dice qué falla y en qué línea, y el mapa se queda como estaba
 - si no os apetece la terminal, me pasáis las hojas por el grupo o las subís aquí desde la web de GitHub, y lo hago yo
+- las conexiones también salen solas si en `conceptos.csv` le ponéis a cada palabra su `seccion` (T0, T1…), su `proceso` (golpe, gota/rebote…) y su `medio` (audio, vídeo…). se unen las que comparten algo, cada una con 2 de su grupo, no todas con todas
+- en el mapa las de sección van continuas, las de proceso discontinuas y las de medio punteadas
+- si queréis más líneas, `npm run layout -- --enlaces 3`
+- una celda puede llevar varios separados por comas, y `relaciones.csv` sigue valiendo pa unir dos a mano
 
 
 ## Si algo falla

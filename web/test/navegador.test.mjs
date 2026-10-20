@@ -48,7 +48,7 @@ before(async () => {
       { id: 'roto', label: 'Roto', lv: 1, x: 700, y: 1300 },
       { id: 'otra', label: 'Otra', lv: 3, x: 300, y: 400 },
     ],
-    links: [['con', 'sin']],
+    links: [['con', 'sin'], ['con', 'otra', 'proceso'], ['sin', 'otra', 'medio']],
   }));
   srv = spawn(process.execPath, ['server/index.js'], {
     cwd: web,
@@ -156,6 +156,16 @@ test('una pantalla recupera el vídeo cuando vuelve la red, aunque fallara al em
     await max.close();
     await t.close();
   }
+});
+
+test('las líneas del proceso van discontinuas y las del medio punteadas, y las demás continuas', { skip }, async () => {
+  const trazo = (sel) => b.evaluate(`getComputedStyle(document.querySelector('${sel}')).strokeDasharray`);
+  // La prueba de antes deja «Silencio» encendido hasta que llega su
+  // /tele1/video 0, y una línea encendida lleva el trazo de la señal.
+  await b.until(`!document.querySelector('.link.lit')`, 4000);
+  assert.equal(await trazo('.link:not(.proceso):not(.medio)'), 'none');
+  assert.equal(await trazo('.link.proceso'), '7px, 5px');
+  assert.equal(await trazo('.link.medio'), '1.5px, 4px');
 });
 
 test('el punto de conexión no usa el verde de «suena en la sala», y los botones van subrayados', { skip }, async () => {

@@ -55,7 +55,7 @@ npm run dev          # servidor + simulador de sala en http://localhost:8080
 - `http://localhost:8080/screen/tele1` → la página de la pantalla `tele1`. Hay una por pantalla, con el nombre que use el Max.
 - `http://localhost:8080/health` → estado en texto plano.
 - `npm run max` → un Max de prueba que manda la escena de ejemplo del patch de Juanlu.
-- `npm test` → 102 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
+- `npm test` → 105 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
 
 `npm start` arranca como en la sala, sin simulador. Ahí `/dev` y su API no
 existen, porque cualquiera en la Wi-Fi de la sala podría encender conceptos a
@@ -76,10 +76,12 @@ simulado».
 
 ## Cambiar conceptos y relaciones (sin tocar código)
 
-1. Editar `data/conceptos.csv` (`id,etiqueta,archivo,duracion,numero`, y si se quiere `nivel`) y `data/relaciones.csv` (`origen,destino`). `numero` es el número con el que el Max pide ese vídeo a una pantalla (`/tele1/video 3`). Tiene que ser un entero desde el 1 y sin repetir, porque el 0 es negro. En la hoja de ejemplo van del 1 al 50 por orden. Un concepto sin número sale en el mapa igual, pero ninguna pantalla lo puede poner. `nivel` dice el tamaño de la palabra. El 1 son los conceptos principales (los más grandes, en negrita), el 2 los secundarios (en negrita) y el 3 el resto. Sin esa columna el nivel sale de las relaciones, y los 8 conceptos más conectados son de nivel 1 y los 16 siguientes, de nivel 2. Si se usa, lo que se deje vacío es nivel 3.
+1. Editar `data/conceptos.csv` (`id,etiqueta,archivo,duracion,numero`, y si se quiere `nivel`, `seccion`, `proceso` y `medio`) y `data/relaciones.csv` (`origen,destino`). `numero` es el número con el que el Max pide ese vídeo a una pantalla (`/tele1/video 3`). Tiene que ser un entero desde el 1 y sin repetir, porque el 0 es negro. En la hoja de ejemplo van del 1 al 50 por orden. Un concepto sin número sale en el mapa igual, pero ninguna pantalla lo puede poner. `nivel` dice el tamaño de la palabra. El 1 son los conceptos principales (los más grandes, en negrita), el 2 los secundarios (en negrita) y el 3 el resto. Sin esa columna el nivel sale de las relaciones, y los 8 conceptos más conectados son de nivel 1 y los 16 siguientes, de nivel 2. Si se usa, lo que se deje vacío es nivel 3.
    Valen tal como los guarde Excel, Numbers o LibreOffice. Pueden ir con comas o con punto y coma (Excel en español usa punto y coma), con comillas, en UTF-8, UTF-16 o la codificación antigua de Windows o de Mac, y con las columnas con o sin tilde («Nº vídeo» o «duración (s)» también valen). La duración se puede escribir como salga, `1:30`, `45s`, `2m30` o `1 min` (y `1,30` lo lee como 1:30, avisando). Las relaciones se pueden escribir por id o por etiqueta.
 2. `npm run layout` → recalcula las posiciones con d3-force y escribe `public/map.json` y `public/contents.json`. Cada palabra se coloca con una caja de su tamaño real, así que ninguna pisa a otra (en Space Mono cada letra mide 0,612 em, y el ancho se sabe sin navegador). Si algo no cuadra, lista todos los errores de una vez, cada uno con su línea, y no toca el mapa que había. También avisa de lo que antes pasaba en silencio, como columnas que no conoce, etiquetas repetidas o celdas vacías en las relaciones.
 3. Recargar la web. Al servidor no hace falta reiniciarlo, y los móviles que estén abiertos recargan solos cuando cambia la hoja.
+
+Las relaciones también salen solas de tres columnas de `conceptos.csv`, `seccion` (T0, T1…), `proceso` (golpe, gota/rebote, ciclo…) y `medio` (audio, vídeo, texto…). Al pasar el layout se unen los que comparten algo, sin unirlos todos con todos. Cada concepto se une con 2 de su grupo, o con los que digas en `npm run layout -- --enlaces 3`. Si a alguno le toca quedarse sin ninguna, se une con el que menos lleve, aunque ese pase de 2. Cuáles se unen lo decide una huella de cada pareja y no el azar, así que con la misma hoja sale siempre el mismo mapa. Una celda puede llevar varios separados por comas («golpe, ciclo», y si la hoja va con comas, entre comillas, que Excel y Numbers ya las ponen), la barra va dentro del nombre («gota/rebote» es uno), y mayúsculas y tildes dan igual. Si uno es el único de su grupo te lo avisa, por si es una errata. En el mapa, las de la sección van continuas, las del proceso discontinuas y las del medio punteadas. Las de `relaciones.csv` siguen valiendo para unir dos a mano, van continuas y ganan si la pareja ya va unida por otra cosa, que ninguna se pinta dos veces. Al colocar las palabras, la sección es la que más junta, y cada una sale como una isla. El proceso junta menos y el medio casi nada, porque une palabras de todas las secciones y apelotonaría el mapa. Encendida, cualquier línea lleva la señal que corre por encima.
 
 Las posiciones también se pueden poner a mano, de dos maneras. Con columnas
 `x` e `y` en `conceptos.csv` (en el lienzo de `map.json`, que mide 1400 × 2000
@@ -365,13 +367,14 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - El arranque solo en el Mac de la sala (`sala/mac/`), con la comprobación de los ajustes del Mac.
 - Las pantallas por cable se abren solas en cada ordenador, en un Mac o en Windows, se reabren si se cierran, y si su pantalla se apaga se cierran y vuelven cuando se enciende (`sala/pantallas/`).
 - Los vídeos se buscan en `media/` en vivo, con sus versiones, y `npm run versiones` las saca de los masters.
+- Las relaciones salen solas de la sección, el proceso y el medio de cada concepto, en nube y no todos con todos, y cada tipo con su línea (continua, discontinua y punteada).
 - Los carteles con su QR y la prueba de carga.
 
 **Probado**
 
 - Lo probé en móviles reales el 23-09-2026, con un MP4 de prueba, en un iPhone (Safari) y un Android (Chrome 153). Suena desde el primer toque, «← mapa» y el «atrás» de Android vuelven al mapa en el mismo sitio, girar el móvil conserva el mapa, quitar la Wi-Fi para el vídeo, avisa y reconecta, y bloquear el móvil o salir de Chrome lo para. Con los dos a la vez, lo que se enciende en uno se enciende en el otro al instante. Los gestos ya los había comprobado el 22-09-2026 en iPhone, Android y Windows.
 - Lo del Max y las pantallas, con las pruebas de `npm test` y en Chrome con la escena de ejemplo. Abrí una pantalla como si fuera un iPad (sin sonido hasta el toque), otra como una Raspberry (suena sin toque), el móvil y el panel, y congelé el servidor 27 s. En ese rato la pantalla avisa sin cortar lo que pone, y al volver sigue sin empezar de nuevo.
-- 102 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 16-10-2026, las de Windows con PowerShell 7 en el Mac).
+- 105 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 19-10-2026, las de Windows con PowerShell 7 en el Mac).
 
 Hay capturas en `docs/` (`captura-mapa.jpg` en oscuro, `captura-mapa-claro.jpg`
 y `captura-video.jpg`). Son del 22-09-2026, todavía con puntos en vez de

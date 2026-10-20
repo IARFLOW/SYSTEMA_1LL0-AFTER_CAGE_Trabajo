@@ -123,7 +123,9 @@ const links = rot.append('g').attr('class', 'links')
   .selectAll('line')
   .data(map.links)
   .join('line')
-  .attr('class', 'link')
+  // Las que salen de la sección, el proceso o el medio llevan su tipo, que
+  // les pone su línea (continua, discontinua o punteada, en app.css).
+  .attr('class', ([, , tipo]) => (tipo ? `link ${tipo}` : 'link'))
   .attr('x1', ([a]) => byId.get(a).x)
   .attr('y1', ([a]) => byId.get(a).y)
   .attr('x2', ([, b]) => byId.get(b).x)

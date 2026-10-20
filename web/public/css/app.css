@@ -258,6 +258,11 @@ button {
   fill: none;
   transition: stroke 0.3s, stroke-opacity 0.3s;
 }
+/* Las de la sección van continuas, como las de relaciones.csv, las del
+   proceso discontinuas y las del medio punteadas. Van antes de .lit para que
+   la señal que recorre una arista encendida las tape igual a todas. */
+.link.proceso { stroke-dasharray: 7 5; }
+.link.medio { stroke-dasharray: 1.5 4; }
 /* La señal recorre la arista que toca un nodo activo (el «beam», en SVG puro) */
 .link.lit {
   stroke: var(--accent);

@@ -6,6 +6,8 @@
 //   npm run layout                 → lee data/conceptos.csv y data/relaciones.csv
 //   npm run layout -- --keep       → conserva las x/y que ya hay en map.json
 //                                    (retoques a mano) y solo coloca los nuevos
+//   npm run layout -- --enlaces 3  → por sección, proceso y medio, cada concepto
+//                                    se une con 3 de su grupo (si no, con 2)
 //
 // El móvil nunca simula física. Recibe coordenadas fijas, y así 30 teléfonos
 // no gastan CPU en asentar el grafo y Guille y Juanlu pueden retocar posiciones.
@@ -23,8 +25,12 @@
 //                   «numero» es el número con el que Max pide ese vídeo a una
 //                   pantalla (/tele1/video 3). El 0 no, que es pantalla en negro.
 //                   «nivel» es 1 en los conceptos principales (más grandes y
-//                   en negrita), 2 en los secundarios (en negrita) y 3 en el resto
-//   relaciones.csv  origen, destino (por id o por etiqueta)
+//                   en negrita), 2 en los secundarios (en negrita) y 3 en el resto.
+//                   «seccion» (T0, T1…), «proceso» (golpe, gota/rebote…) y
+//                   «medio» (audio, vídeo…) unen solos a los que comparten algo,
+//                   y cada una sale con su línea (continua, discontinua y
+//                   punteada). Una celda puede llevar varios, con comas
+//   relaciones.csv  origen, destino (por id o por etiqueta), para unir dos a mano
 //
 // Con ffprobe instalado, además se revisa que cada MP4 sea H.264 y AAC, que
 // un móvil lo pueda reproducir y que empiece sin descargarse entero. La
@@ -43,6 +49,12 @@ import {
 // RAIZ es otra carpeta con su data/, public/ y media/ (la usan las pruebas).
 const root = process.env.RAIZ ? resolvePath(process.env.RAIZ) : join(dirname(fileURLToPath(import.meta.url)), '..');
 const keep = process.argv.includes('--keep');
+const enlacesArg = process.argv.indexOf('--enlaces');
+const enlaces = enlacesArg === -1 ? 2 : Number(process.argv[enlacesArg + 1]);
+if (!Number.isInteger(enlaces) || enlaces < 1 || enlaces > 20) {
+  console.error('--enlaces va con un número del 1 al 20, por ejemplo npm run layout -- --enlaces 3');
+  process.exit(1);
+}
 const W = 1400; // lienzo vertical, porque los móviles se usan en vertical
 const H = 2000;
 const PAD = 120;
@@ -113,8 +125,15 @@ const ALIAS = {
   'n.º video': 'numero', 'n° video': 'numero', 'n video': 'numero', 'no video': 'numero', 'video n': 'numero',
   'video nº': 'numero', 'numero max': 'numero', 'numero de max': 'numero', max: 'numero',
   nivel: 'nivel', importancia: 'nivel',
+  seccion: 'seccion', secciones: 'seccion', section: 'seccion', apartado: 'seccion',
+  proceso: 'proceso', procesos: 'proceso', familia: 'proceso', familias: 'proceso',
+  'proceso sonoro': 'proceso', 'tipo de proceso': 'proceso',
+  medio: 'medio', medios: 'medio', 'tipo de medio': 'medio', soporte: 'medio',
 };
-const KNOWN = { 'conceptos.csv': ['id', 'etiqueta', 'archivo', 'duracion', 'numero', 'nivel', 'x', 'y'], 'relaciones.csv': ['origen', 'destino'] };
+const KNOWN = {
+  'conceptos.csv': ['id', 'etiqueta', 'archivo', 'duracion', 'numero', 'nivel', 'seccion', 'proceso', 'medio', 'x', 'y'],
+  'relaciones.csv': ['origen', 'destino'],
+};
 
 function sheet(name, required) {
   const path = join(root, 'data', name);
@@ -237,6 +256,73 @@ for (const r of relaciones) {
   links.push({ source: a, target: b });
 }
 if (errors.length) fail();
+const aMano = links.length;
+
+// ---------- Relaciones por sección, por proceso y por medio ----------
+// A cada concepto se le pone su sección (T0, T1…), su proceso (golpe,
+// gota/rebote, ciclo…) y su medio (audio, vídeo…), y de ahí salen solas las
+// líneas entre los que comparten algo. No se une cada uno con todos los de su
+// grupo, que con 30 en una sección serían 435 líneas, sino con «enlaces» de
+// ellos como mucho (2 si no se dice), y sale como una nube. Las parejas se
+// recorren en el orden de una huella de cada una, no al azar, y se une la que
+// todavía tiene sitio en los dos. Así, con la misma hoja sale siempre lo
+// mismo, y un concepto nuevo apenas cambia las líneas de los demás. El que se
+// quede sin ninguna se une con el que menos lleve, aunque ese pase del tope,
+// porque una palabra suelta de su sección parecería una errata. Una celda puede llevar varios,
+// separados por comas («golpe, ciclo»), y la barra va dentro del nombre
+// («gota/rebote» es uno). Mayúsculas y tildes dan igual («T1» y «t1» son la
+// misma sección). Una pareja que ya está unida no se repite. Gana la de
+// relaciones.csv, y si no, la sección, luego el proceso y luego el medio.
+const TIPOS = { seccion: 'la sección', proceso: 'el proceso', medio: 'el medio' };
+const porTipo = { seccion: 0, proceso: 0, medio: 0 };
+const huella = (s) => createHash('sha1').update(s).digest().readUInt32BE(0);
+for (const tipo of Object.keys(TIPOS)) {
+  const grupos = new Map();
+  for (const c of ids.values()) {
+    for (const v of (c[tipo] ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
+      const k = norm(v);
+      if (!grupos.has(k)) grupos.set(k, { nombre: v, miembros: [] });
+      const g = grupos.get(k);
+      if (!g.miembros.includes(c.id)) g.miembros.push(c.id);
+    }
+  }
+  for (const [k, { nombre, miembros }] of grupos) {
+    if (miembros.length < 2) {
+      warnings.push(`«${ids.get(miembros[0]).etiqueta}» es el único con ${TIPOS[tipo]} «${nombre}», así que por ahí no se une con nadie. Si es una errata, mira cómo está escrito en los demás`);
+      continue;
+    }
+    const parejas = [];
+    for (let i = 0; i < miembros.length; i += 1) {
+      for (let j = i + 1; j < miembros.length; j += 1) {
+        const [a, b] = [miembros[i], miembros[j]].sort();
+        parejas.push({ a, b, h: huella(`${tipo}|${k}|${a}|${b}`) });
+      }
+    }
+    parejas.sort((x, y) => x.h - y.h || (`${x.a}|${x.b}` < `${y.a}|${y.b}` ? -1 : 1));
+    // Las que ya une otra cosa cuentan, que una pareja no se pinta dos veces.
+    const lleva = new Map(miembros.map((id) => [id, 0]));
+    for (const { a, b } of parejas) {
+      if (seen.has(`${a}|${b}`)) { lleva.set(a, lleva.get(a) + 1); lleva.set(b, lleva.get(b) + 1); }
+    }
+    const unir = (a, b) => {
+      seen.add(`${a}|${b}`);
+      links.push({ source: a, target: b, tipo });
+      porTipo[tipo] += 1;
+      lleva.set(a, lleva.get(a) + 1);
+      lleva.set(b, lleva.get(b) + 1);
+    };
+    for (const { a, b } of parejas) {
+      if (!seen.has(`${a}|${b}`) && lleva.get(a) < enlaces && lleva.get(b) < enlaces) unir(a, b);
+    }
+    for (const id of miembros) {
+      if (lleva.get(id)) continue;
+      const suyas = parejas.filter((x) => (x.a === id || x.b === id) && !seen.has(`${x.a}|${x.b}`));
+      const otro = (x) => (x.a === id ? x.b : x.a);
+      const p = suyas.reduce((m, x) => (!m || lleva.get(otro(x)) < lleva.get(otro(m)) ? x : m), null);
+      if (p) unir(p.a, p.b);
+    }
+  }
+}
 
 // ---------- Que los vídeos existan y un móvil los pueda reproducir ----------
 function hasFfprobe() {
@@ -487,13 +573,19 @@ function unclash(list, walls = false) {
 // La distancia de cada línea sale del tamaño de sus dos palabras. Dos grandes
 // necesitan más sitio que dos pequeñas para que la línea se vea entre ellas.
 const linkDistance = (l) => 0.35 * (l.source.w + l.target.w) + 80;
+// Las de relaciones.csv y las de la sección juntan las palabras, y así cada
+// sección sale como una isla. Las del proceso tiran menos, y las del medio
+// casi nada, porque unen palabras de todas las secciones y apelotonarían el
+// mapa entero. Se pintan igual, solo cambia cuánto acercan.
+const TIRA = { seccion: 0.5, proceso: 0.15, medio: 0.03 };
+const linkStrength = (l) => TIRA[l.tipo] ?? 0.5;
 let sim;
 if (!anchored) {
   // Un mapa nuevo va libre alrededor de (0, 0) y después se centra en el
   // lienzo. Tira más hacia el eje vertical que hacia el horizontal porque el
   // mapa se mira en un móvil en vertical, y así sale más alto que ancho.
   sim = forceSimulation(nodes)
-    .force('link', forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(0.5))
+    .force('link', forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(linkStrength))
     .force('charge', forceManyBody().strength(-900))
     .force('x', forceX(0).strength(0.1))
     .force('y', forceY(0).strength(0.012))
@@ -515,7 +607,7 @@ if (!anchored) {
     n.y = by + rnd() * 80;
   }
   sim = forceSimulation(nodes)
-    .force('link', forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(0.5))
+    .force('link', forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(linkStrength))
     .force('charge', forceManyBody().strength(-900))
     .force('x', forceX(canvas.width / 2).strength(0.02))
     .force('y', forceY(canvas.height / 2).strength(0.02))
@@ -572,7 +664,9 @@ const out = {
   font: FONT,          // cuerpo de cada nivel, en unidades del mapa
   advance: ADVANCE,    // ancho de cada letra, en em
   nodes: nodes.map((n) => ({ id: n.id, label: n.label, lv: n.lv, x: Math.round(n.x), y: Math.round(n.y) })),
-  links: simLinks.map((l) => [l.source.id, l.target.id]),
+  // Las de sección, proceso y medio llevan su tipo detrás, que es lo que
+  // decide su línea. Las de relaciones.csv van como siempre, sin tipo.
+  links: simLinks.map((l) => (l.tipo ? [l.source.id, l.target.id, l.tipo] : [l.source.id, l.target.id])),
 };
 
 // ---------- contents.json, concepto ↔ archivo ↔ duración ----------
@@ -618,7 +712,7 @@ writeFileSync(join(root, 'public', 'contents.json'), JSON.stringify(contents));
 const fresh = nodes.length - byHand - kept;
 const per = [1, 2, 3].map((lv) => nodes.filter((n) => n.lv === lv).length);
 console.log(`map.json lleva ${out.nodes.length} palabras (${per.join(' / ')} de nivel 1, 2 y 3${byColumn ? ', según la columna «nivel»' : ', según sus relaciones'}), `
-  + `${out.links.length} enlaces y pesa ${(JSON.stringify(out).length / 1024).toFixed(1)} kB`
+  + `${out.links.length} enlaces${aMano < out.links.length ? ` (${aMano} a mano, ${porTipo.seccion} por sección, ${porTipo.proceso} por proceso y ${porTipo.medio} por medio)` : ''} y pesa ${(JSON.stringify(out).length / 1024).toFixed(1)} kB`
   + (anchored ? `. Hay ${byHand} fijadas a mano, ${kept} conservadas y ${fresh} colocadas ahora` : ''));
 console.log(`lienzo ${canvas.width} × ${canvas.height}, las palabras ocupan ${Math.round(used.x1 - used.x0)} × ${Math.round(used.y1 - used.y0)}`
   + `${stuck.length ? '' : ', ninguna pisa a otra'}`);

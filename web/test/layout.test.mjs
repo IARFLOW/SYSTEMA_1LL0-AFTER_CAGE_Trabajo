@@ -118,6 +118,67 @@ test('con 100 conceptos y una palabra fijada a mano, ninguna se sale del lienzo'
   assert.deepEqual([fijada.x, fijada.y], [700, 1000], 'lo fijado no se mueve');
 });
 
+// Lo que piden Guille y Juanlu (19-10-2026): cada concepto con su sección, su
+// proceso y su medio, y las líneas salen solas entre los que comparten algo,
+// en nube y no todos con todos.
+const etiquetadas = 'id,etiqueta,seccion,proceso,medio\n'
+  + 'a,A,T1,golpe,audio\nb,B,T1,golpe,audio\nc,C,t1,"gota/rebote, golpe",audio\nd,D,T1,ciclo,audio\n'
+  + 'e,E,T1,ciclo,audio\nf,F,T1,fricción,audio\ng,G,T2,Fricción,audio\nh,H,T2,,vídeo\n';
+const porTipo = (map, tipo) => map.links.filter((l) => l[2] === tipo);
+const cuantas = (lineas, id) => lineas.filter((l) => l[0] === id || l[1] === id).length;
+
+test('la sección, el proceso y el medio unen solos a los que comparten algo, sin unirlos todos con todos', () => {
+  const raiz = hoja({ conceptos: etiquetadas, relaciones: 'origen,destino\na,b\n' });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  const map = leer(raiz, 'map.json');
+  const de = {
+    seccion: { a: 't1', b: 't1', c: 't1', d: 't1', e: 't1', f: 't1', g: 't2', h: 't2' },
+    proceso: { a: ['golpe'], b: ['golpe'], c: ['gota/rebote', 'golpe'], d: ['ciclo'], e: ['ciclo'], f: ['friccion'], g: ['friccion'], h: [] },
+    medio: { a: 'audio', b: 'audio', c: 'audio', d: 'audio', e: 'audio', f: 'audio', g: 'audio', h: 'video' },
+  };
+  for (const [x, y, tipo] of map.links) {
+    if (!tipo) continue;
+    const comparten = tipo === 'proceso' ? de.proceso[x].some((p) => de.proceso[y].includes(p)) : de[tipo][x] === de[tipo][y];
+    assert.ok(comparten, `${x} y ${y} van unidos por ${tipo} sin compartirlo`);
+  }
+  // La de relaciones.csv gana, y la pareja no se pinta otra vez por la sección.
+  assert.deepEqual(map.links.filter((l) => [l[0], l[1]].sort().join() === 'a,b'), [['a', 'b']]);
+  // «T1» y «t1» son la misma sección. Cada uno lleva una o dos de ella, y uno
+  // como mucho una de más para que nadie se quede suelto, nunca las 15 de
+  // todos con todos.
+  const t1 = porTipo(map, 'seccion').filter((l) => de.seccion[l[0]] === 't1');
+  const llevan = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => cuantas(t1, id) + (id === 'a' || id === 'b' ? 1 : 0));
+  assert.ok(llevan.every((n) => n >= 1 && n <= 3), `llevan ${llevan}`);
+  assert.ok(llevan.filter((n) => n === 3).length <= 1, `llevan ${llevan}`);
+  assert.ok(t1.length < 15);
+  // «gota/rebote» es un proceso, y «Fricción» y «fricción», el mismo.
+  assert.match(r.stdout, /«C» es el único con el proceso «gota\/rebote»/);
+  assert.ok(porTipo(map, 'proceso').some((l) => [l[0], l[1]].sort().join() === 'f,g'), 'f y g comparten fricción');
+  assert.match(r.stdout, /«H» es el único con el medio «vídeo»/);
+  assert.match(r.stdout, /\d+ enlaces \(1 a mano, \d+ por sección, \d+ por proceso y \d+ por medio\)/);
+  // Con la misma hoja sale lo mismo.
+  const otra = hoja({ conceptos: etiquetadas, relaciones: 'origen,destino\na,b\n' });
+  assert.equal(layout(otra).status, 0);
+  assert.deepEqual(leer(otra, 'map.json').links, map.links);
+});
+
+test('--enlaces dice con cuántos de su grupo se une cada uno, y un número que no vale se explica', () => {
+  const raiz = hoja({ conceptos: etiquetadas });
+  let r = layout(raiz, '--enlaces', '1');
+  assert.equal(r.status, 0, r.stderr);
+  const map = leer(raiz, 'map.json');
+  for (const tipo of ['seccion', 'medio']) {
+    for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) assert.ok(cuantas(porTipo(map, tipo), id) <= 1, `${id} lleva más de una por ${tipo}`);
+  }
+  r = layout(raiz, '--enlaces', '3');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(porTipo(leer(raiz, 'map.json'), 'seccion').length > porTipo(map, 'seccion').length);
+  r = layout(raiz, '--enlaces', 'muchos');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--enlaces va con un número del 1 al 20/);
+});
+
 let ffmpeg = true;
 try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); } catch { ffmpeg = false; }
 
