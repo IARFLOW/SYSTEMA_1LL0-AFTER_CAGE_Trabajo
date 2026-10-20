@@ -22,16 +22,19 @@ test('cada QR va a la página de su pantalla, con o sin barra y con el puerto', 
   assert.equal(direccion(new URL('http://192.168.0.10/'), 'musico1'), 'http://192.168.0.10/screen/musico1');
   assert.equal(direccion(new URL('http://192.168.0.10'), 'musico1'), 'http://192.168.0.10/screen/musico1');
   assert.equal(direccion(new URL('http://192.168.0.10:8080'), 'tele2'), 'http://192.168.0.10:8080/screen/tele2');
+  assert.equal(direccion(new URL('http://192.168.0.10/'), 'musico3', 'movil'), 'http://192.168.0.10/screen/musico3?version=movil');
 });
 
-test('con --musicos 10 salen musico1 hasta musico10 en una hoja, con la letra dentro', () => {
+// Con la versión «movil», que pesa menos de la mitad que la «tablet» que
+// cogería un móvil, porque las diez partituras van a la vez que el público.
+test('con --musicos 10 salen musico1 hasta musico10 en una hoja, con la versión ligera y la letra dentro', () => {
   const dir = mkdtempSync(join(todas, 'hoja-'));
   const r = correr('--web', 'http://192.168.0.10/', '--musicos', '10', '--salida', dir);
   assert.equal(r.status, 0, r.stderr);
   const html = readFileSync(join(dir, 'qr-pantallas.html'), 'utf8');
   for (let n = 1; n <= 10; n += 1) {
     const svg = readFileSync(join(dir, `qr-musico${n}.svg`), 'utf8');
-    assert.equal(svg, svgDeQr(`http://192.168.0.10/screen/musico${n}`), `el QR de musico${n}`);
+    assert.equal(svg, svgDeQr(`http://192.168.0.10/screen/musico${n}?version=movil`), `el QR de musico${n}`);
     assert.ok(html.includes(svg), `musico${n} va en la hoja`);
     assert.ok(html.includes(`>/screen/musico${n}<`), `con su dirección escrita`);
   }
@@ -49,6 +52,7 @@ test('con más de 10 sale otra hoja, y valen nombres sueltos', () => {
   const html = readFileSync(join(dir, 'qr-pantallas.html'), 'utf8');
   assert.equal((html.match(/<section class="hoja">/g) ?? []).length, 2);
   assert.ok(existsSync(join(dir, 'qr-tele11.svg')), 'en minúsculas, como las entiende el servidor');
+  assert.equal(readFileSync(join(dir, 'qr-tele1.svg'), 'utf8'), svgDeQr('http://192.168.0.10/screen/tele1'), 'sin versión, que la elige cada aparato');
 });
 
 test('se queja si falta la dirección, las pantallas o un nombre no vale', () => {
@@ -60,6 +64,7 @@ test('se queja si falta la dirección, las pantallas o un nombre no vale', () =>
     [['--web', 'http://192.168.0.10/', 'músico1'], /«músico1» no vale/],
     [['--web', 'http://192.168.0.10/', 'tele1', 'TELE1'], /sale dos veces/],
     [['--web', 'http://192.168.0.10/', '--musicos', '0'], /de 1 a 99/],
+    [['--web', 'http://192.168.0.10/', '--musicos', '3', '--version', 'grande'], /movil, tablet, monitor o ninguna/],
   ];
   for (const [args, re] of casos) {
     const r = correr(...args, '--salida', dir);

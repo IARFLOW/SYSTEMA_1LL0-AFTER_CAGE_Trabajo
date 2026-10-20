@@ -55,7 +55,7 @@ npm run dev          # servidor + simulador de sala en http://localhost:8080
 - `http://localhost:8080/screen/tele1` → la página de la pantalla `tele1`. Hay una por pantalla, con el nombre que use el Max.
 - `http://localhost:8080/health` → estado en texto plano.
 - `npm run max` → un Max de prueba que manda la escena de ejemplo del patch de Juanlu.
-- `npm test` → 112 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
+- `npm test` → 114 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
 
 `npm start` arranca como en la sala, sin simulador. Ahí `/dev` y su API no
 existen, porque cualquiera en la Wi-Fi de la sala podría encender conceptos a
@@ -80,6 +80,19 @@ simulado».
    Valen tal como los guarde Excel, Numbers o LibreOffice. Pueden ir con comas o con punto y coma (Excel en español usa punto y coma), con comillas, en UTF-8, UTF-16 o la codificación antigua de Windows o de Mac, y con las columnas con o sin tilde («Nº vídeo» o «duración (s)» también valen). La duración se puede escribir como salga, `1:30`, `45s`, `2m30` o `1 min` (y `1,30` lo lee como 1:30, avisando). Las relaciones se pueden escribir por id o por etiqueta.
 2. `npm run layout` → recalcula las posiciones con d3-force y escribe `public/map.json` y `public/contents.json`. Cada palabra se coloca con una caja de su tamaño real, así que ninguna pisa a otra (en Space Mono cada letra mide 0,612 em, y el ancho se sabe sin navegador). Si algo no cuadra, lista todos los errores de una vez, cada uno con su línea, y no toca el mapa que había. También avisa de lo que antes pasaba en silencio, como columnas que no conoce, etiquetas repetidas o celdas vacías en las relaciones.
 3. Recargar la web. Al servidor no hace falta reiniciarlo, y los móviles que estén abiertos recargan solos cuando cambia la hoja.
+
+La hoja también se rellena sola con el nombre de cada vídeo (20-10-2026, para
+no escribir lo mismo dos veces con los 80 audios de Juanlu). Un vídeo de
+`media/`, o de sus versiones, que se llame `número_Etiqueta_Sección_Proceso`
+(`101_Piedra_T0_G.mp4`) y no esté en la hoja se añade al final de
+`conceptos.csv` al pasar el layout, con el 101 en `numero`, Piedra en
+`etiqueta`, T0 en `seccion` y G en `proceso`. Luego se le puede poner a mano el
+`nivel` o el `medio`.
+
+- La etiqueta puede llevar espacios y tildes (`102_Cámara anecoica_T1_F`), pero no `_`, que es lo que separa las partes. La sección y el proceso pueden faltar (`103_Gota`).
+- Las filas que ya están no se tocan, porque manda la hoja. Un vídeo cuyo número ya tiene otra fila no se añade, y se avisa.
+- La fila nueva va como la guardó su programa, con el mismo separador, los mismos saltos de línea y la marca de UTF-8 si la llevaba. Si faltan columnas, se añaden al final de la cabecera.
+- Con la hoja abierta en Excel o en Numbers, al guardarla después se perderían las filas nuevas. Se cierra antes de pasar el layout.
 
 Las relaciones también salen solas de tres columnas de `conceptos.csv`, `seccion` (T0, T1…), `proceso` (golpe, gota/rebote, ciclo…) y `medio` (audio, vídeo, texto…). Al pasar el layout se unen los que comparten algo, sin unirlos todos con todos. Cada concepto se une con 2 de su grupo, o con los que digas en `npm run layout -- --enlaces 3`. Si a alguno le toca quedarse sin ninguna, se une con el que menos lleve, aunque ese pase de 2. Cuáles se unen lo decide una huella de cada pareja y no el azar, así que con la misma hoja sale siempre el mismo mapa. Una celda puede llevar varios separados por comas («golpe, ciclo», y si la hoja va con comas, entre comillas, que Excel y Numbers ya las ponen), la barra va dentro del nombre («gota/rebote» es uno), y mayúsculas y tildes dan igual. Si uno es el único de su grupo te lo avisa, por si es una errata. En el mapa, las de la sección van continuas, las del proceso discontinuas y las del medio punteadas. Las de `relaciones.csv` siguen valiendo para unir dos a mano, van continuas y ganan si la pareja ya va unida por otra cosa, que ninguna se pinta dos veces. Al colocar las palabras, la sección es la que más junta, y cada una sale como una isla. El proceso junta menos y el medio casi nada, porque une palabras de todas las secciones y apelotonaría el mapa. Encendida, cualquier línea lleva la señal que corre por encima.
 
@@ -249,8 +262,14 @@ Van clavados entre ellos, como las demás pantallas.
 `npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10`, con la IP
 del Mac en la sala, deja en `carteles/` una hoja con un QR por móvil, en HTML y
 en PDF, y cada QR suelto en SVG. Cada músico escanea el suyo y se le abre su
-página. Vale para cualquier pantalla con nombre, como un iPad que hace de tele
-(`npm run qr-pantallas -- --web … tele1 monitor2`).
+página. El QR lleva `?version=movil`, así que cada móvil se baja la versión
+«movil» de su vídeo, a unos 2,2 Mbps en vez de los 5 de la «tablet» que
+cogería solo. Son diez partituras de 20 minutos a la vez y con el público en
+la misma Wi-Fi, y para leer en un móvil sobra. Con `--version` se elige otra.
+Vale para cualquier pantalla con nombre, como un iPad que hace de tele
+(`npm run qr-pantallas -- --web … tele1 monitor2`), y ahí cada aparato elige
+su versión. En la hoja de 10 QR, el detector de macOS los lee todos, uno a uno
+(20-10-2026).
 
 - Para que el móvil no se apague, mientras espera en negro la página pone debajo un vídeo negro de 10 s en marcha (`public/despierta.mp4`, con una pista de silencio), solo en lo táctil. Chrome no deja apagarse la pantalla con un vídeo en marcha que la ocupe, aunque vaya sin sonido, y la partitura ya lo hace sola. Safari solo si el vídeo tiene sonido y suena, así que en iPhone el negro suena en silencio desde el toque, y sigue debajo si la partitura no tiene sonido. En un móvil de verdad está por probar, así que el bloqueo automático, lo más largo que deje cada móvil.
 - Si el vídeo suena, un toque al abrir la página. En iPhone hace falta igualmente, para que no se apague.
@@ -400,7 +419,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 
 - Lo probé en móviles reales el 23-09-2026, con un MP4 de prueba, en un iPhone (Safari) y un Android (Chrome 153). Suena desde el primer toque, «← mapa» y el «atrás» de Android vuelven al mapa en el mismo sitio, girar el móvil conserva el mapa, quitar la Wi-Fi para el vídeo, avisa y reconecta, y bloquear el móvil o salir de Chrome lo para. Con los dos a la vez, lo que se enciende en uno se enciende en el otro al instante. Los gestos ya los había comprobado el 22-09-2026 en iPhone, Android y Windows.
 - Lo del Max y las pantallas, con las pruebas de `npm test` y en Chrome con la escena de ejemplo. Abrí una pantalla como si fuera un iPad (sin sonido hasta el toque), otra como una Raspberry (suena sin toque), el móvil y el panel, y congelé el servidor 27 s. En ese rato la pantalla avisa sin cortar lo que pone, y al volver sigue sin empezar de nuevo.
-- 112 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 20-10-2026, las de Windows con PowerShell 7 en el Mac).
+- 114 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 20-10-2026, las de Windows con PowerShell 7 en el Mac).
 
 Hay capturas en `docs/` (`captura-mapa.jpg` en oscuro, `captura-mapa-claro.jpg`
 y `captura-video.jpg`). Son del 22-09-2026, todavía con puntos en vez de

@@ -32,6 +32,10 @@
 //                   punteada). Una celda puede llevar varios, con comas
 //   relaciones.csv  origen, destino (por id o por etiqueta), para unir dos a mano
 //
+// Un vídeo de media/ que se llame «número_Etiqueta_Sección_Proceso»
+// (101_Piedra_T0_G.mp4) y no esté en la hoja se añade a conceptos.csv con esas
+// columnas rellenas (ver «Lo que dice el nombre de cada vídeo»).
+//
 // Con ffprobe instalado, además se revisa que cada MP4 sea H.264 y AAC, que
 // un móvil lo pueda reproducir y que empiece sin descargarse entero. La
 // duración se lee del propio vídeo.
@@ -78,11 +82,15 @@ function decode(buf) {
   return new TextDecoder(mac > win ? 'macintosh' : 'windows-1252').decode(b);
 }
 
-function parseCsv(text) {
-  // El separador es el que más aparece en la cabecera.
+// El separador es el que más aparece en la cabecera.
+function separador(text) {
   const head = text.split(/\r?\n/, 1)[0];
   const times = (ch) => head.split(ch).length - 1;
-  const sep = [',', ';', '\t'].reduce((a, b) => (times(b) > times(a) ? b : a));
+  return [',', ';', '\t'].reduce((a, b) => (times(b) > times(a) ? b : a));
+}
+
+function parseCsv(text) {
+  const sep = separador(text);
   const rows = [];
   let cells = [];
   let cell = '';
@@ -168,7 +176,7 @@ function fail() {
   process.exit(1);
 }
 
-const conceptos = sheet('conceptos.csv', ['etiqueta']);
+let conceptos = sheet('conceptos.csv', ['etiqueta']);
 const relaciones = sheet('relaciones.csv', ['origen', 'destino']);
 if (errors.length) fail();
 // Una columna «video» que trae números es, casi seguro, el número de Max y no
@@ -180,8 +188,100 @@ if (conArchivo.length && conArchivo.every((c) => /^\d+$/.test(c.archivo))) {
   fail();
 }
 
-// ---------- Conceptos ----------
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+// Los vídeos se comparan sin mirar mayúsculas ni cómo se guardó la tilde,
+// porque el Finder y los zip guardan «á» como «a» más el acento (NFD), y la
+// hoja no.
+const mediaDir = join(root, 'media');
+const listing = (dir) => (existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith('.')) : []);
+const key = (f) => f.normalize('NFC').toLowerCase();
+
+// ---------- Lo que dice el nombre de cada vídeo ----------
+// Un vídeo de media/ (o de sus versiones) que se llame
+// «número_Etiqueta_Sección_Proceso», como 101_Piedra_T0_G.mp4, y no esté en
+// la hoja se añade al final de conceptos.csv con esas columnas rellenas. Así
+// no se escribe dos veces lo mismo (lo pidió Juanlu el 20-10-2026, con unos
+// 80 audios). La sección y el proceso pueden faltar, y la etiqueta lleva
+// espacios y tildes, pero no «_», que es lo que separa las partes. Las filas
+// que ya hay no se tocan, porque manda lo que diga la hoja.
+const DE_NOMBRE = /^(\d+)_([^_]+)(?:_([^_]+))?(?:_([^_]+))?$/;
+function porNombre() {
+  const enHoja = new Set(conceptos.filter((c) => c.archivo).map((c) => key(c.archivo.replace(/\.[^.]+$/, ''))));
+  const usados = new Map();   // número de Max → quién lo tiene
+  for (const c of conceptos) {
+    const n = Number(String(c.numero ?? '').replace(',', '.'));
+    if (c.numero && Number.isInteger(n)) usados.set(n, c.id || slug(c.etiqueta));
+  }
+  const tomados = new Set(conceptos.map((c) => c.id || slug(c.etiqueta)));
+  // Cada vídeo una vez, esté en media/ o solo en sus versiones.
+  const vistos = new Map();
+  for (const dir of ['', 'movil', 'tablet', 'monitor']) {
+    for (const f of listing(join(mediaDir, dir))) {
+      if (!/\.(mp4|m4v|mov|webm)$/i.test(f)) continue;
+      const base = f.normalize('NFC').replace(/\.[^.]+$/, '');
+      if (!vistos.has(key(base))) vistos.set(key(base), { base, archivo: dir ? `${base}.mp4` : f.normalize('NFC') });
+    }
+  }
+  const nuevas = [];
+  const orden = [...vistos].sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true }));
+  for (const [k, { base, archivo }] of orden) {
+    const m = enHoja.has(k) ? null : DE_NOMBRE.exec(base);
+    if (!m) continue;
+    const n = Number(m[1]);
+    const etiqueta = m[2].trim();
+    if (!etiqueta || n < 1) continue;
+    if (usados.has(n)) {
+      warnings.push(`${archivo} no lo añado a la hoja, porque el ${n} ya lo tiene «${usados.get(n)}»`);
+      continue;
+    }
+    let id = slug(etiqueta) || `concepto_${n}`;
+    if (tomados.has(id)) id = `${id}_${n}`;
+    tomados.add(id);
+    usados.set(n, id);
+    nuevas.push({ id, etiqueta, archivo, numero: String(n), seccion: (m[3] ?? '').trim(), proceso: (m[4] ?? '').trim() });
+  }
+  return nuevas;
+}
+
+// Las filas nuevas van al final de la hoja, como la guardó su programa (el
+// separador, los saltos de línea y la marca de UTF-8 del principio). Las
+// columnas que falten van al final de la cabecera, y las filas de antes, que
+// no las tienen, se leen vacías.
+function escribirFilas(nuevas) {
+  const path = join(root, 'data', 'conceptos.csv');
+  const buf = readFileSync(path);
+  const texto = decode(buf);
+  let utf8 = !((buf[0] === 0xff && buf[1] === 0xfe) || (buf[0] === 0xfe && buf[1] === 0xff));
+  if (utf8) { try { new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { utf8 = false; } }
+  const marca = !utf8 || (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf);
+  const salto = texto.includes('\r\n') ? '\r\n' : (texto.includes('\r') && !texto.includes('\n') ? '\r' : '\n');
+  const sep = separador(texto);
+  const fin = texto.search(/\r\n|\r|\n/);
+  const cabecera = fin === -1 ? texto : texto.slice(0, fin);
+  let resto = fin === -1 ? '' : texto.slice(fin);
+  if (!/(\r\n|\r|\n)$/.test(resto)) resto += salto;
+  const cols = parseCsv(cabecera)[0].cells.map((h) => ALIAS[norm(h)] ?? norm(h));
+  const faltan = ['id', 'etiqueta', 'archivo', 'numero', 'seccion', 'proceso'].filter((c) => !cols.includes(c) && nuevas.some((f) => f[c]));
+  const todas = [...cols, ...faltan];
+  const celda = (v) => (/["\r\n]|^\s|\s$/.test(v) || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v);
+  const filas = nuevas.map((f) => todas.map((c) => celda(f[c] ?? '')).join(sep) + salto).join('');
+  writeFileSync(path, (marca ? '\ufeff' : '') + cabecera + faltan.map((c) => sep + c).join('') + resto + filas);
+  if (!utf8) warnings.push('conceptos.csv iba en una codificación antigua, y al añadirle filas la he guardado en UTF-8, que Excel y Numbers abren igual');
+}
+
+const nuevas = porNombre();
+if (nuevas.length) {
+  escribirFilas(nuevas);
+  const lista = nuevas.map((f) => `${f.etiqueta} (${f.numero})`);
+  console.log(`añado ${nuevas.length} a conceptos.csv, con lo que dice el nombre de su vídeo: ${lista.slice(0, 12).join(', ')}${lista.length > 12 ? ` y ${lista.length - 12} más` : ''}`);
+  // Leída otra vez, la hoja repetiría los avisos de la primera.
+  const avisos = warnings.length;
+  conceptos = sheet('conceptos.csv', ['etiqueta']);
+  warnings.length = avisos;
+  if (errors.length) fail();
+}
+
+// ---------- Conceptos ----------
 const ids = new Map();
 const byLabel = new Map();
 const nums = new Map();
@@ -379,11 +479,7 @@ function checkVideo(c, path) {
 // media/monitor, las que saca `npm run versiones`). El servidor vuelve a
 // buscarlos al arrancar y cada vez que cambia algo, así que un vídeo copiado
 // después también vale. Lo de aquí sirve para revisarlos y avisar ya.
-// Se compara sin mirar mayúsculas ni cómo se guardó la tilde, porque el Finder
-// y los zip guardan «á» como «a» más el acento (NFD), y la hoja no.
-const mediaDir = join(root, 'media');
-const listing = (dir) => (existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith('.')) : []);
-const key = (f) => f.normalize('NFC').toLowerCase();
+// Se compara sin mirar mayúsculas ni cómo se guardó la tilde (ver «key»).
 const onDisk = new Map(listing(mediaDir).map((f) => [key(f), f]));
 const versions = Object.fromEntries(['movil', 'tablet', 'monitor'].map((v) => [v, new Map(listing(join(mediaDir, v)).map((f) => [key(f), f]))]));
 const probe = hasFfprobe();

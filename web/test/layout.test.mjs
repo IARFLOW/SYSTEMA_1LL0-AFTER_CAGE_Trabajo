@@ -60,6 +60,55 @@ test('una columna «video» con números se explica, y dos columnas para lo mism
   assert.match(r.stderr, /«archivo» y «video» valen las dos para «archivo»/);
 });
 
+// Juanlu nombra cada audio como «número_Etiqueta_Sección_Proceso» y no quiere
+// escribir lo mismo otra vez en la hoja (20-10-2026). Se añade solo, y en el
+// formato en que la guardó su programa.
+test('un vídeo que se llama número_Etiqueta_Sección_Proceso y no está en la hoja se añade a ella', () => {
+  const conceptos = '﻿id;etiqueta;archivo;numero\r\nsilencio;Silencio;;1\r\n';
+  const raiz = hoja({
+    conceptos,
+    media: {
+      '101_Piedra_T0_G.mp4': 'x',
+      // Solo en una versión, con tilde y espacio, y la tilde como la guarda el Finder.
+      ['movil/102_Cámara anecoica_T1_F.mp4'.normalize('NFD')]: 'x',
+      'ruido.mp4': 'x',
+      'versiones.json': '{}',
+    },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /añado 2 a conceptos\.csv/);
+  const bytes = readFileSync(join(raiz, 'data', 'conceptos.csv'));
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'con la marca de UTF-8 del principio, como estaba');
+  const texto = bytes.toString('utf8').slice(1);
+  assert.equal(texto, 'id;etiqueta;archivo;numero;seccion;proceso\r\nsilencio;Silencio;;1\r\n'
+    + 'piedra;Piedra;101_Piedra_T0_G.mp4;101;T0;G\r\ncamara_anecoica;Cámara anecoica;102_Cámara anecoica_T1_F.mp4;102;T1;F\r\n',
+    'la fila de antes igual, las columnas que faltaban al final de la cabecera y con punto y coma y saltos de Windows');
+  const c = leer(raiz, 'contents.json');
+  assert.equal(c.piedra.num, 101);
+  assert.equal(c.camara_anecoica.num, 102);
+  assert.ok(leer(raiz, 'map.json').nodes.some((n) => n.label === 'Cámara anecoica'));
+  // Otra pasada no añade nada.
+  const otra = layout(raiz);
+  assert.equal(otra.status, 0, otra.stderr);
+  assert.doesNotMatch(otra.stdout, /añado/);
+  assert.equal(readFileSync(join(raiz, 'data', 'conceptos.csv')).toString('utf8').slice(1), texto);
+});
+
+test('un vídeo con un número que ya está en la hoja no se añade, y se dice', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,archivo,numero,notas\npiedra,Piedra,101_piedra_t0_g.mp4,101,la de la entrada\n',
+    media: { '101_Piedra_T0_G.mp4': 'x', '105_Otra_T0_G.mp4': 'x', '101_Repetido_T2_C.mp4': 'x' },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /101_Repetido_T2_C\.mp4.*el 101 ya lo tiene «piedra»/);
+  assert.equal(r.stdout.split('no conozco la columna «notas»').length - 1, 1, 'el aviso de la columna, una vez aunque la hoja se lea dos');
+  const texto = readFileSync(join(raiz, 'data', 'conceptos.csv'), 'utf8');
+  assert.equal(texto, 'id,etiqueta,archivo,numero,notas,seccion,proceso\npiedra,Piedra,101_piedra_t0_g.mp4,101,la de la entrada\notra,Otra,105_Otra_T0_G.mp4,105,,T0,G\n',
+    'el que ya estaba en la hoja con otras mayúsculas no se repite, y cada celda nueva va bajo su columna');
+});
+
 test('las duraciones, escritas de cualquier manera', () => {
   const raiz = hoja({ conceptos: 'id,etiqueta,duracion\na,A,90\nb,B,1:30\nc,C,45s\nd,D,2m30\ne,E,1 min\nf,F,1\'30"\ng,G,"1,30"\nh,H,12.5\n' });
   const r = layout(raiz);

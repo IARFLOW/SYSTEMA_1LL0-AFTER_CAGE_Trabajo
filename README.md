@@ -59,6 +59,7 @@ npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10
 ```
 
 - os deja en `web/carteles` una hoja con un qr pa cada móvil. la imprimís y cada músico escanea el suyo
+- el qr ya hace que cada móvil se baje la versión ligera de su partitura, que pesa menos de la mitad, así no se carga tanto la wifi
 - mientras esperan en negro la página no deja que se apague la pantalla, pero en un móvil de verdad está por probar, así que poned el bloqueo automático lo más largo que deje cada uno
 - si las partituras llevan sonido, un toque en la pantalla al abrirla. en iphone hace falta igual, pa que no se apague
 
@@ -86,6 +87,10 @@ npm run layout
 - en el mapa las de sección van continuas, las de proceso discontinuas y las de medio punteadas
 - si queréis más líneas, `npm run layout -- --enlaces 3`
 - una celda puede llevar varios separados por comas, y `relaciones.csv` sigue valiendo pa unir dos a mano
+- y si los vídeos se llaman número_Palabra_Sección_Proceso, tipo 101_Piedra_T0_G, al pasar el layout se añaden solos al final de `conceptos.csv`, con el número, la palabra, la sección y el proceso en sus columnas. luego solo les ponéis el nivel o el medio si queréis
+- la palabra puede llevar espacios y tildes, tipo 102_Cámara anecoica_T1_F, pero sin _ dentro, que es lo que separa las partes
+- las filas que ya estaban no se tocan, y si un número ya lo tiene otra fila os avisa y no la añade
+- antes de pasar el layout cerrad la hoja, que si está abierta en excel y la guardáis después se pierden las filas nuevas
 
 
 ## Si algo falla

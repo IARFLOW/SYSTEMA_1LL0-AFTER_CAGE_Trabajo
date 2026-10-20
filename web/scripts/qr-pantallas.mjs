@@ -4,9 +4,14 @@
 // para cualquier pantalla con nombre (un iPad que hace de tele, por ejemplo).
 //
 //   npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10
-//                       musico1 hasta musico10
+//                       musico1 hasta musico10, con la versión «movil» de los
+//                       vídeos, que pesa menos de la mitad que la «tablet» que
+//                       cogería un móvil (2,2 Mbps frente a 5). Diez partituras
+//                       de 20 minutos a la vez, con el público en la misma Wi-Fi
 //   npm run qr-pantallas -- --web http://192.168.0.10/ tele1 monitor2
 //                       las que se digan, con su nombre de Max
+//   npm run qr-pantallas -- … --version tablet            otra versión (movil, tablet o
+//                       monitor), o «ninguna» para que la elija cada aparato
 //   npm run qr-pantallas -- … --salida otra/carpeta       carteles/ por defecto
 //
 // La dirección es la del Mac en la red de la sala, con el puerto si no es el
@@ -33,7 +38,7 @@ export const TEXTOS = {
 };
 
 function opciones(argv) {
-  const o = { web: null, nombres: [], salida: join(root, 'carteles') };
+  const o = { web: null, nombres: [], salida: join(root, 'carteles'), version: undefined, musicos: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const v = argv[i + 1];
@@ -43,6 +48,10 @@ function opciones(argv) {
       const n = Number(toma());
       if (!Number.isInteger(n) || n < 1 || n > 99) fallar('--musicos es cuántos, de 1 a 99');
       for (let k = 1; k <= n; k += 1) o.nombres.push(`musico${k}`);
+      o.musicos = true;
+    } else if (a === '--version') {
+      o.version = toma().toLowerCase();
+      if (!['movil', 'tablet', 'monitor', 'ninguna'].includes(o.version)) fallar('--version es movil, tablet, monitor o ninguna');
     } else if (a === '--salida') o.salida = resolve(toma());
     else if (a.startsWith('--')) fallar(`no conozco la opción ${a}`);
     else o.nombres.push(a);
@@ -59,6 +68,8 @@ function opciones(argv) {
   const repe = o.nombres.find((n, i) => o.nombres.indexOf(n) !== i);
   if (repe) fallar(`«${repe}» sale dos veces`);
   o.url = url;
+  if (o.version === undefined) o.version = o.musicos ? 'movil' : 'ninguna';
+  if (o.version === 'ninguna') o.version = null;
   return o;
 }
 
@@ -67,8 +78,13 @@ function fallar(texto) {
   process.exit(1);
 }
 
-// La dirección de cada pantalla, sobre la del Mac.
-export const direccion = (url, nombre) => new URL(`screen/${nombre}`, url.href.endsWith('/') ? url.href : `${url.href}/`).href;
+// La dirección de cada pantalla, sobre la del Mac, y con la versión de los
+// vídeos si se dice (la lee screen.js).
+export function direccion(url, nombre, version = null) {
+  const u = new URL(`screen/${nombre}`, url.href.endsWith('/') ? url.href : `${url.href}/`);
+  if (version) u.searchParams.set('version', version);
+  return u.href;
+}
 
 // La dirección va en dos líneas, el Mac y la página, para que no se parta a
 // mitad de palabra. En el registro de los carteles (Space Mono, regla punteada, marcas de
@@ -126,7 +142,7 @@ async function main() {
   const o = opciones(process.argv.slice(2));
   mkdirSync(o.salida, { recursive: true });
   const pantallas = o.nombres.map((nombre) => {
-    const href = direccion(o.url, nombre);
+    const href = direccion(o.url, nombre, o.version);
     const qr = svgDeQr(href);
     writeFileSync(join(o.salida, `qr-${nombre}.svg`), qr);
     return { nombre, href, qr };
@@ -139,6 +155,7 @@ async function main() {
   if (c) await imprimir(c, html, join(o.salida, 'qr-pantallas.pdf'));
   console.log(`la hoja está en ${o.salida}`);
   console.log(`  qr-pantallas     ${pantallas.length} pantallas en ${grupos.length === 1 ? '1 hoja' : `${grupos.length} hojas`}, de ${pantallas[0].href} a ${pantallas.at(-1).href}`);
+  if (o.version) console.log(`  con la versión «${o.version}» de los vídeos`);
   console.log(c ? '  en HTML y en PDF, y cada QR suelto en SVG' : '  en HTML (sin Chrome no sale el PDF, se imprime desde el navegador), y cada QR suelto en SVG');
 }
 
