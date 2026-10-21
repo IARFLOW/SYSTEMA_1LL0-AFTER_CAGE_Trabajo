@@ -466,6 +466,15 @@ button {
   object-fit: contain;
   background: #000;
 }
+/* El altavoz de los audios, en medio y pequeño, como en la referencia de
+   Juanlu (un sexto del ancho en un móvil de pie). */
+.player .altavoz {
+  grid-area: 1 / 1;
+  place-self: center;
+  width: 16vmin;
+  height: auto;
+  pointer-events: none;
+}
 .sim {
   display: grid;
   place-content: center;

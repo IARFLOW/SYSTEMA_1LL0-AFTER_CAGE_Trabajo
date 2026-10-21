@@ -143,6 +143,13 @@ muy alto. Hace falta ffmpeg, y si se lanza otra vez solo rehace lo que ha
 cambiado. Cada aparato coge su versión solo, y si no la hay, la del vídeo tal
 cual.
 
+El negro de un audio lleva encima un altavoz en el móvil del público, para que
+se sepa que está sonando algo. Las pantallas de la sala no lo ponen nunca, ni
+las teles ni los monitores ni los móviles de los músicos. El dibujo es
+`public/altavoz.png`. Para poner otro se cambia ese fichero, y si se borra no
+sale nada. El móvil sabe qué es un audio por `media/versiones.json`, así que
+esa carpeta se copia entera, con su `versiones.json`.
+
 Cada dirección lleva una huella (`?v=…`) que cambia al sustituir el fichero.
 Los móviles guardan cada vídeo un mes, y sin ella un MP4 corregido con el mismo
 nombre no le llegaría a quien ya vio el anterior.

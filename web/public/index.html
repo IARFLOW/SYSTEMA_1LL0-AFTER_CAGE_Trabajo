@@ -58,6 +58,8 @@
        sonando, y al volver la página quedaba ampliada (×1,55, medido). -->
   <section class="player" id="player" role="dialog" aria-modal="true" aria-labelledby="now-label" hidden>
     <video id="video" playsinline preload="metadata" disablepictureinpicture></video>
+    <!-- Encima del negro de un audio. Es public/altavoz.png, y si no está, no sale nada. -->
+    <img class="altavoz" id="altavoz" alt="" hidden>
     <div class="sim" id="sim" hidden>
       <p class="sim-label" id="sim-label"></p>
       <p class="sim-note">clip simulado · sin MP4 todavía</p>

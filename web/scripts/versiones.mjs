@@ -142,6 +142,7 @@ function sondear(ruta) {
       campos: v.field_order ?? 'unknown',
       matriz: v.color_space ?? 'unknown',
       transferencia: v.color_transfer ?? 'unknown',
+      primarios: v.color_primaries ?? 'unknown',
       rango: v.color_range ?? 'unknown',
       pixeles: v.pix_fmt ?? '',
       codec: v.codec_name,
@@ -212,7 +213,10 @@ function avisosDe(m) {
     return avisos;
   }
   // HDR o gama ancha. Un ProRes de 10 bits en Rec.709 es lo normal y no cuenta.
-  if (['smpte2084', 'arib-std-b67'].includes(v.transferencia) || v.matriz.startsWith('bt2020')) {
+  // Tampoco la matriz Rec.2020 sola, con la curva y los colores de siempre.
+  // TouchDesigner la pone en lo que pasa de 1080 de alto, y leída con una
+  // matriz o con la otra cambia 6 o 7 niveles de 255 (medido el 21-10-2026).
+  if (['smpte2084', 'arib-std-b67'].includes(v.transferencia) || v.primarios.startsWith('bt2020')) {
     avisos.push('parece HDR o de gama ancha (Rec.2020, HLG o PQ). Aquí no se convierte bien y los colores pueden salir lavados. Mejor pedir el master exportado en SDR Rec.709');
   }
   if (v.fps && v.fps.v > 30.01) avisos.push(`viene a ${v.fps.v.toFixed(2).replace(/\.?0+$/, '')} fps y sale a ${cadencia(v.fps).v.toFixed(2).replace(/\.?0+$/, '')}`);
@@ -442,6 +446,15 @@ async function main() {
     }
   }
 
+  // Qué masters son solo audio, para que el móvil del público ponga el
+  // altavoz encima del negro. En los que ya estaban hechos también se apunta,
+  // sin volver a codificar nada.
+  const marcarAudio = (e, m) => { if (m.video) delete e.soloAudio; else e.soloAudio = true; };
+  for (const m of estudiados) {
+    const e = manifiesto.masters[m.fichero];
+    if (!m.roto && e?.huella === m.huella) marcarAudio(e, m);
+  }
+
   const tareas = [];
   for (const m of estudiados) {
     if (m.roto) continue;
@@ -481,6 +494,7 @@ async function main() {
       nueva.duracion = Math.round(t.m.duracion * 100) / 100;
       if (t.m.lufs !== undefined) { nueva.lufs = t.m.lufs; nueva.pico = t.m.pico; }
       nueva.avisos = t.m.avisos;
+      marcarAudio(nueva, t.m);
       nueva.salidas[t.v] = {
         fichero: `${t.v}/${t.m.base}.mp4`, ancho: plan.ancho, alto: plan.alto,
         fps: Math.round(plan.fps.v * 1000) / 1000, kbps: r.kbps, bytes: r.bytes,

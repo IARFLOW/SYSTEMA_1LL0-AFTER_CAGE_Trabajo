@@ -34,11 +34,20 @@ before(async () => {
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=20', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-shortest', '-movflags', '+faststart', join(media, 'con.mp4')]);
   writeFileSync(join(media, 'roto.mp4'), Buffer.alloc(4096, 7));      // no es un vídeo
+  // Un audio, en negro y con su versión de móvil, como lo deja npm run versiones.
+  mkdirSync(join(media, 'movil'));
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=25:d=20',
+    '-f', 'lavfi', '-i', 'sine=frequency=330:duration=20', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-shortest', '-movflags', '+faststart', join(media, 'movil', 'voz.mp4')]);
+  writeFileSync(join(media, 'versiones.json'), JSON.stringify({ masters: {
+    'voz.wav': { soloAudio: true, salidas: { movil: { fichero: 'movil/voz.mp4' } } },
+  } }));
   writeFileSync(join(cat, 'contents.json'), JSON.stringify({
     con: { archivo: 'con.mp4', duration: 20, num: 1 },
     sin: { duration: 10, num: 2 },
     roto: { archivo: 'roto.mp4', duration: 10, num: 3 },
     otra: { duration: 10, num: 4 },
+    voz: { archivo: 'voz.wav', duration: 20, num: 5 },
   }));
   writeFileSync(join(cat, 'map.json'), JSON.stringify({
     version: 2, width: 1400, height: 2000, font: { 1: 44, 2: 31, 3: 24 }, advance: 0.612,
@@ -47,6 +56,7 @@ before(async () => {
       { id: 'sin', label: 'Sin vídeo', lv: 1, x: 700, y: 1000 },
       { id: 'roto', label: 'Roto', lv: 1, x: 700, y: 1300 },
       { id: 'otra', label: 'Otra', lv: 3, x: 300, y: 400 },
+      { id: 'voz', label: 'Voz', lv: 1, x: 700, y: 1600 },
     ],
     links: [['con', 'sin'], ['con', 'otra', 'proceso'], ['sin', 'otra', 'medio']],
   }));
@@ -254,6 +264,49 @@ test('un móvil que espera en negro tiene un vídeo en marcha para no apagarse, 
     await max.send('/musico3/video', 0);
     await max.close();
     await Promise.all([m.close(), tele.close()]);
+  }
+});
+
+// Pedido el 21-10-2026. El altavoz sale en el móvil del público cuando lo que
+// suena es un audio, y nunca en las pantallas de la sala, músicos incluidos.
+test('un audio lleva el altavoz en el móvil del público, un vídeo no, y una pantalla de la sala nunca', { skip, timeout: 40000 }, async () => {
+  const c = await (await fetch(`${base}/contents.json`)).json();
+  assert.equal(c.voz.audio, true, 'el servidor lo marca por el registro');
+  assert.equal(c.con.audio, undefined);
+  const visible = `(() => { const a = document.getElementById('altavoz'); return !a.hidden && a.complete && a.naturalWidth > 0
+    && getComputedStyle(a).display !== 'none'; })()`;
+  const v = await centro('voz');
+  await b.tap(v.x, v.y);
+  await b.until(`!document.getElementById('player').hidden`, 4000);
+  await b.until(visible, 4000);
+  // En medio de la pantalla y pequeño.
+  const r = await b.evaluate(`(() => { const a = document.getElementById('altavoz').getBoundingClientRect();
+    return { cx: a.left + a.width / 2, cy: a.top + a.height / 2, w: a.width, vw: innerWidth, vh: innerHeight }; })()`);
+  assert.ok(Math.abs(r.cx - r.vw / 2) < 2 && Math.abs(r.cy - r.vh / 2) < 2, JSON.stringify(r));
+  assert.ok(r.w > 20 && r.w < r.vw / 4, JSON.stringify(r));
+  await b.evaluate(`document.getElementById('back').click()`);
+  await b.until(`document.getElementById('player').hidden`, 4000);
+  // Un vídeo normal, sin altavoz.
+  const p = await centro('con');
+  await b.tap(p.x, p.y);
+  await b.until(`!document.getElementById('player').hidden`, 4000);
+  assert.equal(await b.evaluate(`document.getElementById('altavoz').hidden`), true);
+  await b.evaluate(`document.getElementById('back').click()`);
+  await b.until(`document.getElementById('player').hidden`, 4000);
+  // El móvil de un músico pone el mismo audio, sin altavoz.
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const m = await launch();
+  try {
+    await mobile(m);
+    await goto(m, `${base}/screen/musico5`);
+    await max.send('/musico5/video', 5);
+    await m.until(`!document.getElementById('video').paused && document.getElementById('video').currentTime > 0.3`, 8000);
+    assert.equal(await m.evaluate(`document.getElementById('altavoz')`), null);
+  } finally {
+    await max.send('/musico5/video', 0);
+    await max.close();
+    await m.close();
   }
 });
 

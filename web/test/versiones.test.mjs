@@ -193,3 +193,41 @@ test('un audio largo sale con su duración, sin segundos de más en el negro', {
   assert.ok(Math.abs(Number(info.format.duration) - 47.3) < 0.25, `dura ${info.format.duration}`);
   assert.ok(Math.abs(Number(video(info).duration) - 47.3) < 0.25, `el negro dura ${video(info).duration}`);
 });
+
+// El móvil del público pone el altavoz encima del negro de un audio, y lo sabe
+// por el registro. En lo que ya estaba hecho se apunta sin codificar otra vez.
+test('el registro apunta qué masters son solo audio, también en los ya hechos', { skip }, () => {
+  const ruta = join(media, 'versiones.json');
+  let m = JSON.parse(readFileSync(ruta, 'utf8'));
+  assert.equal(m.masters['solo audio.wav'].soloAudio, true);
+  assert.equal(m.masters['horizontal.mov'].soloAudio, undefined);
+  // Como lo dejaba la versión de antes, sin la marca.
+  delete m.masters['solo audio.wav'].soloAudio;
+  writeFileSync(ruta, JSON.stringify(m));
+  const r = correr();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /todo está hecho/);
+  m = JSON.parse(readFileSync(ruta, 'utf8'));
+  assert.equal(m.masters['solo audio.wav'].soloAudio, true);
+});
+
+// TouchDesigner pone la matriz Rec.2020 en lo que pasa de 1080 de alto, con la
+// curva sRGB y los colores de siempre. Eso no es HDR, y avisar de que lo es
+// asustaba. Con la curva PQ sí lo es.
+test('solo avisa de HDR cuando lo es, no por la matriz Rec.2020 sola', { skip }, () => {
+  const otro = join(dir, 'color');
+  mkdirSync(otro);
+  const clip = (nombre, ...color) => ff('-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=1',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', ...color, join(otro, nombre));
+  // Con -color_trc y -color_primaries libx264 solo guarda la matriz, así que van por x264-params.
+  clip('touch.mp4', '-x264-params', 'colormatrix=bt2020nc:transfer=iec61966-2-1:colorprim=bt709');
+  clip('pq.mp4', '-x264-params', 'colormatrix=bt2020nc:transfer=smpte2084:colorprim=bt2020');
+  assert.equal(video(probe(join(otro, 'touch.mp4'))).color_transfer, 'iec61966-2-1');
+  assert.equal(video(probe(join(otro, 'pq.mp4'))).color_transfer, 'smpte2084');
+  const salida = join(dir, 'color-media');
+  const r = spawnSync(process.execPath, [script, '--masters', otro, '--media', salida, '--solo', 'movil'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const m = JSON.parse(readFileSync(join(salida, 'versiones.json'), 'utf8'));
+  assert.ok(!m.masters['touch.mp4'].avisos.some((a) => /HDR/.test(a)), m.masters['touch.mp4'].avisos.join(' · '));
+  assert.ok(m.masters['pq.mp4'].avisos.some((a) => /HDR/.test(a)), 'el de PQ sí avisa');
+});

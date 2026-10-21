@@ -9,6 +9,7 @@ const stage = $('stage');
 const player = $('player');
 const video = $('video');
 const sim = $('sim');
+const altavoz = $('altavoz');
 const simLabel = $('sim-label');
 const timerEl = $('timer');
 const progress = $('progress');
@@ -601,6 +602,17 @@ function armStall(id) {
   }, 15000);
 }
 
+// El altavoz va encima del negro cuando lo que suena es un audio, como pidieron
+// Guille y Juanlu el 21-10-2026. Solo aquí, en el móvil del público. Las
+// pantallas de la sala no lo ponen nunca. Se pide la primera vez que hace
+// falta, y si public/altavoz.png no está, no sale nada.
+let altavozFalta = false;
+altavoz.addEventListener('error', () => { altavozFalta = true; altavoz.hidden = true; });
+function mostrarAltavoz(si) {
+  if (si && !altavozFalta && !altavoz.getAttribute('src')) altavoz.src = '/altavoz.png';
+  altavoz.hidden = !si || altavozFalta;
+}
+
 function open(id) {
   const c = contents[id];
   const n = byId.get(id);
@@ -630,6 +642,7 @@ function open(id) {
   if (c.file) {
     sim.hidden = true;
     video.hidden = false;
+    mostrarAltavoz(Boolean(c.audio));
     // La versión para móvil, si las hay (npm run versiones).
     video.src = c.files?.movil ?? c.file;
     loading(true);
@@ -641,6 +654,7 @@ function open(id) {
     });
   } else {
     // Sin MP4 todavía, un clip simulado del mismo tiempo para probar el flujo
+    mostrarAltavoz(false);
     video.hidden = true;
     sim.hidden = false;
     simLabel.textContent = n.label;

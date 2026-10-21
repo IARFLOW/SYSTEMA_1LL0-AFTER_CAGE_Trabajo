@@ -93,6 +93,14 @@ npm run layout
 - antes de pasar el layout cerrad la hoja, que si está abierta en excel y la guardáis después se pierden las filas nuevas
 
 
+## Los audios
+
+- los audios los pasáis por `npm run versiones` igual que los vídeos, y salen en negro
+- en el móvil del público llevan encima un altavoz, pa que se sepa que está sonando algo. en las teles, los monitores, los proyectores, los ipads y los móviles de los músicos no sale
+- el dibujo es `web/public/altavoz.png`. si queréis otro cambiáis ese fichero, y si lo borráis no sale ninguno
+- si ya los teníais convertidos, lanzad otra vez `npm run versiones` y en un momento apunta cuáles son audios, sin convertir nada otra vez
+
+
 ## Si algo falla
 
 - si la terminal dice que el puerto 8080 lo tiene otro programa, cerrad ese programa o arrancad en otro. en la Terminal escribís `PORT=8090 sh` con un espacio, arrastráis arrancar.command y le dais a Intro

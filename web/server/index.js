@@ -24,7 +24,7 @@
 // la Wi-Fi de la sala podría mandar OSC.
 import { createServer } from 'node:http';
 import { createSocket } from 'node:dgram';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync,
@@ -288,6 +288,27 @@ function mediaUrl(folder, name, now) {
   return { url: `/media/${folder ? `${folder}/` : ''}${encodeURIComponent(name)}?v=${v}`, path, stamp };
 }
 
+// Los vídeos que salieron de un master que solo era audio, según el registro
+// de npm run versiones (media/versiones.json). En el móvil del público llevan
+// el altavoz encima del negro. Las pantallas de la sala no lo miran. Sin
+// registro, o si no se puede leer, ninguno.
+function soloAudio() {
+  const ruta = join(MEDIA, 'versiones.json');
+  let stamp = '-';
+  const nombres = new Set();
+  try {
+    stamp = String(statSync(ruta).mtimeMs);
+    const m = JSON.parse(readFileSync(ruta, 'utf8'));
+    for (const e of Object.values(m?.masters ?? {})) {
+      if (!e?.soloAudio) continue;
+      for (const s of Object.values(e.salidas ?? {})) {
+        if (typeof s?.fichero === 'string') nombres.add(basename(s.fichero).normalize('NFC').toLowerCase());
+      }
+    }
+  } catch { /* sin registro */ }
+  return { nombres, stamp };
+}
+
 // El archivo de un concepto, tal como lo dejó layout (o, en un contents.json
 // de antes, sacado de su «file»).
 function archivoDe(c) {
@@ -320,10 +341,11 @@ function refreshCatalog() {
   catalog.failed = false;
   pasada += 1;
   const media = mediaIndex();
+  const audio = soloAudio();
   const items = new Map();
   const byNum = new Map();
   const missing = [];
-  const stamps = [sheetStamp];
+  const stamps = [sheetStamp, audio.stamp];
   for (const [id, c] of Object.entries(contents ?? {})) {
     if (!c || typeof c !== 'object') continue;
     const archivo = archivoDe(c);
@@ -352,7 +374,9 @@ function refreshCatalog() {
         for (const f of Object.values(found)) stamps.push(f.stamp);
       } else missing.push(`${id} (${archivo})`);
     }
-    items.set(id, { id, label: labels.get(id) ?? id, archivo, file, files, duration: duration || 10, num: c.num ?? null });
+    const base = archivo ? archivo.normalize('NFC').replace(/\.[^.]+$/, '') : null;
+    const sonido = Boolean(file && base && audio.nombres.has(`${base}.mp4`.toLowerCase()));
+    items.set(id, { id, label: labels.get(id) ?? id, archivo, file, files, duration: duration || 10, num: c.num ?? null, audio: sonido });
     if (Number.isInteger(c.num)) byNum.set(c.num, id);
   }
   for (const [ruta, v] of vistos) if (v.pasada !== pasada) vistos.delete(ruta);
@@ -360,6 +384,7 @@ function refreshCatalog() {
   if (stamp === catalog.stamp) return catalog;
   const json = JSON.stringify(Object.fromEntries([...items.values()].map((it) => [it.id, {
     file: it.file, ...(it.files ? { files: it.files } : {}), duration: it.duration, ...(it.num ? { num: it.num } : {}),
+    ...(it.audio ? { audio: true } : {}),
   }])));
   const withVideo = [...items.values()].filter((it) => it.file).length;
   // Una marca de lo que tienen los móviles. Si cambia (otra hoja, otro mapa,
