@@ -178,3 +178,18 @@ test('con dos masters que darían el mismo nombre, lo dice y no hace nada', { sk
   assert.equal(r.status, 1);
   assert.match(r.stderr, /darían el mismo nombre/);
 });
+
+// Los audios de Juanlu (21-10-2026). El negro salía de una fuente sin fin
+// cortada con -shortest, y el codificador de vídeo se pasaba unos 3 s en un
+// audio largo, así que la comprobación lo rechazaba. Con 3 s no se notaba.
+test('un audio largo sale con su duración, sin segundos de más en el negro', { skip }, () => {
+  const otro = join(dir, 'largo');
+  mkdirSync(otro);
+  ff('-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=48000:duration=47.3', '-ac', '2', '-c:a', 'pcm_s24le', join(otro, 'largo.wav'));
+  const salida = join(dir, 'largo-media');
+  const r = spawnSync(process.execPath, [script, '--masters', otro, '--media', salida, '--solo', 'movil'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const info = probe(join(salida, 'movil', 'largo.mp4'));
+  assert.ok(Math.abs(Number(info.format.duration) - 47.3) < 0.25, `dura ${info.format.duration}`);
+  assert.ok(Math.abs(Number(video(info).duration) - 47.3) < 0.25, `el negro dura ${video(info).duration}`);
+});

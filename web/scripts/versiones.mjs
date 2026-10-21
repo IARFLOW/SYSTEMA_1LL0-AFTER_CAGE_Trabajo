@@ -270,10 +270,13 @@ function orden(m, perfil, entrada, salida, loud) {
   const final = ['-map_metadata', '-1', '-map_chapters', '-1', '-movflags', '+faststart', '-f', 'mp4', salida];
   if (!m.video) {
     // Solo audio, con imagen negra de 1280 × 720 a 25 fps. El tamaño da igual
-    // (es negro) y así decodificarla no le cuesta nada a nadie.
+    // (es negro) y así decodificarla no le cuesta nada a nadie. El negro dura
+    // lo que el audio. Sin fin y cortado con -shortest, el codificador se
+    // pasaba unos 3 s en un audio largo (los de Juanlu, 21-10-2026).
     const fps = { n: 25, d: 1, v: 25 };
+    const dura = m.duracion > 0 ? `:d=${m.duracion.toFixed(3)}` : '';
     return {
-      args: [...comun, '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=25', '-i', entrada,
+      args: [...comun, '-f', 'lavfi', '-i', `color=c=black:s=1280x720:r=25${dura}`, '-i', entrada,
         '-map', '0:v:0', '-map', '1:a:0', '-shortest',
         ...argumentosX264(perfil, fps, true), ...argumentosAudio(loud), ...final],
       ancho: 1280, alto: 720, fps,
