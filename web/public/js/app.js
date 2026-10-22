@@ -72,6 +72,13 @@ const [map, contents] = demo ? [demo.map, demo.contents]
   : await Promise.all([load('/map.json'), load('/contents.json')]);
 setOffline(false);
 const byId = new Map(map.nodes.map((n) => [n.id, n]));
+// Una palabra puede llevar varios vídeos, el mismo concepto visto desde varias
+// pantallas (sus «videos», con el id de cada uno en contents.json). Lo que
+// suena en la sala o se ve en un móvil llega con el id del vídeo, y se
+// enciende su palabra.
+const videosDe = (id) => byId.get(id)?.videos ?? [id];
+const palabraDe = new Map(map.nodes.flatMap((n) => videosDe(n.id).map((v) => [v, n.id])));
+const palabra = (v) => palabraDe.get(v) ?? v;
 
 // El grado de cada concepto desempata, con el mapa girado, qué palabra calla
 // primero cuando dos se pisan.
@@ -523,7 +530,8 @@ window.addEventListener('resize', () => {
 // ---------------------------------------------------------------------------
 let simTimer = null;
 let simEnd = 0;
-let playingId = null;
+let playingId = null;     // la palabra que se está viendo
+let playingVideo = null;  // y cuál de sus vídeos, que es lo que se le dice al servidor
 let nowTimer = null;
 let returnFocus = null;
 let stallTimer = null;
@@ -582,7 +590,7 @@ function say(text, ms = 4000) {
 // atascado), se dice, y se avisa al servidor para que en la sala se sepa cuál.
 function fail(id, why) {
   if (playingId !== id) return;
-  send({ type: 'phone:error', id, why });
+  send({ type: 'phone:error', id: playingVideo, why });
   close();
   say(`«${byId.get(id)?.label ?? ''}» no se puede ver ahora`);
 }
@@ -613,9 +621,24 @@ function mostrarAltavoz(si) {
   altavoz.hidden = !si || altavozFalta;
 }
 
+// De una palabra con varios vídeos se pone uno al azar, y si hay más de uno,
+// no el que este móvil puso la última vez en esa palabra. Los que no tienen
+// fichero solo cuentan si no lo tiene ninguno.
+const ultimo = new Map();   // palabra → el último vídeo que se puso
+function elegir(id) {
+  const todos = videosDe(id).filter((v) => contents[v]);
+  const conFichero = todos.filter((v) => contents[v].file);
+  let lista = conFichero.length ? conFichero : todos;
+  if (lista.length > 1) lista = lista.filter((v) => v !== ultimo.get(id));
+  const v = lista[Math.floor(Math.random() * lista.length)] ?? null;
+  if (v) ultimo.set(id, v);
+  return v;
+}
+
 function open(id) {
-  const c = contents[id];
   const n = byId.get(id);
+  const vid = n ? elegir(id) : null;
+  const c = vid ? contents[vid] : null;
   if (!c || !n) return;
   markTouched(id);
   if (!c.file && !devMode) {
@@ -627,6 +650,7 @@ function open(id) {
   }
   hint.classList.add('hide');
   playingId = id;
+  playingVideo = vid;
   document.body.classList.add('viendo');
 
   // Todo esto va aquí mismo, síncrono, dentro del toque, porque iOS solo deja
@@ -693,14 +717,15 @@ function open(id) {
   clearTimeout(nowTimer);
   now.classList.add('show');
   nowTimer = setTimeout(() => now.classList.remove('show'), 2500);
-  send({ type: 'phone:play', id });
+  send({ type: 'phone:play', id: vid });
 }
 
 function close() {
   // history.back() dispara popstate → close() otra vez, y playingId hace de guarda.
   if (!playingId) return;
-  const id = playingId;
+  const vid = playingVideo;
   playingId = null;
+  playingVideo = null;
   document.body.classList.remove('viendo');
   clearInterval(simTimer);
   clearTimeout(nowTimer);
@@ -725,7 +750,7 @@ function close() {
   try {
     if (history.state?.playing) { backPending = true; history.back(); }
   } catch { /* iframe sin historial */ }
-  send({ type: 'phone:stop', id });
+  send({ type: 'phone:stop', id: vid });
   // La hoja cambió mientras se veía el vídeo, así que recarga ahora que no hay
   // nada abierto. Solo con conexión, porque si el cierre viene de perderla,
   // recargar daba la página de error del navegador, y la de Safari no se
@@ -920,8 +945,8 @@ let announceTimer = null;
 let lastAnnounce = 0;
 
 function applyActive(ids, phones = []) {
-  const next = new Set(ids.filter((id) => nodeEl.has(id)));
-  const nextMobile = new Set(phones.filter((id) => nodeEl.has(id) && !next.has(id)));
+  const next = new Set(ids.map(palabra).filter((id) => nodeEl.has(id)));
+  const nextMobile = new Set(phones.map(palabra).filter((id) => nodeEl.has(id) && !next.has(id)));
   for (const id of active) if (!next.has(id)) setNodeActive(id, false);
   // Una línea puede unir dos activos, así que se reafirma tras apagar
   for (const id of next) setNodeActive(id, true);
@@ -978,7 +1003,7 @@ function connect() {
     setOffline(false);
     send({ type: 'hello', role: 'phone' });
     // Un vídeo abierto con la conexión caída no llegó a apuntarse. Va ahora.
-    if (playingId) send({ type: 'phone:play', id: playingId });
+    if (playingVideo) send({ type: 'phone:play', id: playingVideo });
   });
 
   sock.addEventListener('message', (ev) => {

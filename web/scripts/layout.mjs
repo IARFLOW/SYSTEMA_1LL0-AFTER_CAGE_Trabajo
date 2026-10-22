@@ -32,6 +32,9 @@
 //                   punteada). Una celda puede llevar varios, con comas
 //   relaciones.csv  origen, destino (por id o por etiqueta), para unir dos a mano
 //
+// Las filas con la misma etiqueta son una sola palabra con varios vídeos, y el
+// móvil del público pone uno al azar (ver «Palabras, una por etiqueta»).
+//
 // Un vídeo de media/ que se llame «número_Etiqueta_Sección_Proceso»
 // (101_Piedra_T0_G.mp4) y no esté en la hoja se añade a conceptos.csv con esas
 // columnas rellenas (ver «Lo que dice el nombre de cada vídeo»).
@@ -285,7 +288,6 @@ if (nuevas.length) {
 const ids = new Map();
 const byLabel = new Map();
 const nums = new Map();
-const dupLabels = new Set();
 for (const c of conceptos) {
   if (!c.etiqueta) { errors.push(`conceptos.csv, línea ${c.line}, falta la etiqueta`); continue; }
   if (!c.id) {
@@ -298,15 +300,15 @@ for (const c of conceptos) {
   }
   if (ids.has(c.id)) { errors.push(`conceptos.csv, línea ${c.line}, el id «${c.id}» ya está en la línea ${ids.get(c.id).line}`); continue; }
   ids.set(c.id, c);
-  // Dos conceptos con la misma etiqueta pueden ser a propósito (dos vídeos de
-  // la misma palabra), pero en las relaciones escritas por etiqueta no se
-  // sabría cuál es. Se avisa, y si una relación la usa, se pide el id.
-  if (!byLabel.has(norm(c.etiqueta))) byLabel.set(norm(c.etiqueta), c.id);
-  else {
-    const first = ids.get(byLabel.get(norm(c.etiqueta)));
-    warnings.push(`conceptos.csv, línea ${c.line}, la etiqueta «${c.etiqueta}» ya la tiene «${first.id}» en la línea ${first.line}`);
-    dupLabels.add(norm(c.etiqueta));
-  }
+  // Las filas con la misma etiqueta son una sola palabra en el mapa con varios
+  // vídeos, uno por fila, cada uno con su número para Max (lo pidió Guille el
+  // 22-10-2026, con el mismo concepto visto desde varias pantallas). La
+  // palabra lleva el id de la primera fila. Hasta entonces salía la misma
+  // palabra repetida, una por fila.
+  if (!byLabel.has(norm(c.etiqueta))) {
+    byLabel.set(norm(c.etiqueta), c.id);
+    c.filas = [c];
+  } else ids.get(byLabel.get(norm(c.etiqueta))).filas.push(c);
   // El número con el que lo pide Max. Dos conceptos con el mismo número
   // harían que la pantalla pusiera uno y el mapa encendiera el otro.
   if (c.numero) {
@@ -328,18 +330,28 @@ for (const c of conceptos) {
   }
 }
 
+// ---------- Palabras, una por etiqueta ----------
+// Cada palabra del mapa es su primera fila, con todas las de su etiqueta en
+// «filas». Lo que va al mapa (relaciones, nivel, posición) es de la palabra,
+// y lo que va a las pantallas (número, vídeo, duración) sigue siendo de cada
+// fila. El nivel es el más importante de sus filas, y la posición fijada a
+// mano, la de la primera que la tenga.
+const palabras = [...ids.values()].filter((c) => c.filas);
+const palabraDe = new Map();
+for (const p of palabras) {
+  for (const f of p.filas) palabraDe.set(f.id, p.id);
+  const lvs = p.filas.map((f) => f.lv).filter(Boolean);
+  if (lvs.length) p.lv = Math.min(...lvs);
+}
+
 // ---------- Relaciones, por id o por etiqueta ----------
-const resolve = (v) => (ids.has(v) ? v : byLabel.get(norm(v)));
+// Una relación con el id de cualquier fila, o con la etiqueta, va a su palabra.
+const resolve = (v) => palabraDe.get(ids.has(v) ? v : byLabel.get(norm(v)));
 const seen = new Set();
 const links = [];
 for (const r of relaciones) {
   if (!r.origen || !r.destino) {
     errors.push(`relaciones.csv, línea ${r.line}, falta ${!r.origen && !r.destino ? 'el origen y el destino' : !r.origen ? 'el origen' : 'el destino'}`);
-    continue;
-  }
-  const ambiguous = [r.origen, r.destino].filter((v) => !ids.has(v) && dupLabels.has(norm(v)));
-  if (ambiguous.length) {
-    errors.push(`relaciones.csv, línea ${r.line}, hay varios conceptos «${ambiguous[0]}». Escribe su id en vez de la etiqueta`);
     continue;
   }
   const a = resolve(r.origen);
@@ -349,7 +361,10 @@ for (const r of relaciones) {
     errors.push(`relaciones.csv, línea ${r.line}, no hay ningún concepto ${which}`);
     continue;
   }
-  if (a === b) { errors.push(`relaciones.csv, línea ${r.line}, «${r.origen}» se une consigo mismo`); continue; }
+  if (a === b) {
+    errors.push(`relaciones.csv, línea ${r.line}, ${r.origen === r.destino ? `«${r.origen}» se une consigo mismo` : `«${r.origen}» y «${r.destino}» son la misma palabra «${ids.get(a).etiqueta}»`}`);
+    continue;
+  }
   const key = [a, b].sort().join('|');
   if (seen.has(key)) { warnings.push(`relaciones.csv, línea ${r.line}, la relación entre ${a} y ${b} está repetida y cuenta una vez`); continue; }
   seen.add(key);
@@ -378,12 +393,13 @@ const porTipo = { seccion: 0, proceso: 0, medio: 0 };
 const huella = (s) => createHash('sha1').update(s).digest().readUInt32BE(0);
 for (const tipo of Object.keys(TIPOS)) {
   const grupos = new Map();
-  for (const c of ids.values()) {
-    for (const v of (c[tipo] ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
+  // Una palabra con varias filas está en el grupo de cualquiera de ellas.
+  for (const p of palabras) {
+    for (const v of p.filas.flatMap((f) => (f[tipo] ?? '').split(',')).map((x) => x.trim()).filter(Boolean)) {
       const k = norm(v);
       if (!grupos.has(k)) grupos.set(k, { nombre: v, miembros: [] });
       const g = grupos.get(k);
-      if (!g.miembros.includes(c.id)) g.miembros.push(c.id);
+      if (!g.miembros.includes(p.id)) g.miembros.push(p.id);
     }
   }
   for (const [k, { nombre, miembros }] of grupos) {
@@ -510,8 +526,8 @@ for (const c of ids.values()) {
 }
 
 // ---------- Relaciones de cada concepto ----------
-const degree = new Map([...ids.keys()].map((id) => [id, 0]));
-const neighbors = new Map([...ids.keys()].map((id) => [id, []]));
+const degree = new Map(palabras.map((p) => [p.id, 0]));
+const neighbors = new Map(palabras.map((p) => [p.id, []]));
 for (const l of links) {
   degree.set(l.source, degree.get(l.source) + 1);
   degree.set(l.target, degree.get(l.target) + 1);
@@ -525,8 +541,8 @@ for (const l of links) {
 // «nivel». Si no la usan, sale de las relaciones. Los 8 conceptos más
 // conectados son de nivel 1 y los 16 siguientes, de nivel 2. Si la usan, lo
 // que dejen vacío es 3, así que se marca lo importante y lo demás es normal.
-const byColumn = [...ids.values()].some((c) => c.lv);
-[...ids.values()].map((c, i) => ({ c, i }))
+const byColumn = palabras.some((c) => c.lv);
+palabras.map((c, i) => ({ c, i }))
   .sort((a, b) => degree.get(b.c.id) - degree.get(a.c.id) || a.i - b.i)
   .forEach(({ c }, rank) => { if (!c.lv) c.lv = byColumn ? 3 : rank < 8 ? 1 : rank < 24 ? 2 : 3; });
 
@@ -565,8 +581,10 @@ if (keep && existsSync(mapPath)) {
 const num = (v) => (v === undefined || v === '' ? NaN : Number(String(v).replace(',', '.')));
 let byHand = 0;
 let kept = 0;
-const nodes = [...ids.values()].map((c) => {
-  const n = { id: c.id, label: c.etiqueta, lv: c.lv, ...wordBox(c.etiqueta, c.lv) };
+const nodes = palabras.map((p) => {
+  const n = { id: p.id, label: p.etiqueta, lv: p.lv, ...wordBox(p.etiqueta, p.lv) };
+  if (p.filas.length > 1) n.videos = p.filas.map((f) => f.id);
+  const c = p.filas.find((f) => Number.isFinite(num(f.x)) && Number.isFinite(num(f.y))) ?? p;
   const hx = num(c.x);
   const hy = num(c.y);
   if (Number.isFinite(hx) && Number.isFinite(hy)) {
@@ -575,8 +593,8 @@ const nodes = [...ids.values()].map((c) => {
     }
     Object.assign(n, { fx: hx, fy: hy });
     byHand += 1;
-  } else if (previous.has(c.id)) {
-    Object.assign(n, { fx: previous.get(c.id).x, fy: previous.get(c.id).y });
+  } else if (previous.has(p.id)) {
+    Object.assign(n, { fx: previous.get(p.id).x, fy: previous.get(p.id).y });
     kept += 1;
   }
   return n;
@@ -759,7 +777,9 @@ const out = {
   height: canvas.height,
   font: FONT,          // cuerpo de cada nivel, en unidades del mapa
   advance: ADVANCE,    // ancho de cada letra, en em
-  nodes: nodes.map((n) => ({ id: n.id, label: n.label, lv: n.lv, x: Math.round(n.x), y: Math.round(n.y) })),
+  // «videos» va solo en las palabras con más de una fila, con el id de cada
+  // una. El móvil pone una de ellas al azar.
+  nodes: nodes.map((n) => ({ id: n.id, label: n.label, lv: n.lv, x: Math.round(n.x), y: Math.round(n.y), ...(n.videos ? { videos: n.videos } : {}) })),
   // Las de sección, proceso y medio llevan su tipo detrás, que es lo que
   // decide su línea. Las de relaciones.csv van como siempre, sin tipo.
   links: simLinks.map((l) => (l.tipo ? [l.source.id, l.target.id, l.tipo] : [l.source.id, l.target.id])),
@@ -813,6 +833,12 @@ console.log(`map.json lleva ${out.nodes.length} palabras (${per.join(' / ')} de 
 console.log(`lienzo ${canvas.width} × ${canvas.height}, las palabras ocupan ${Math.round(used.x1 - used.x0)} × ${Math.round(used.y1 - used.y0)}`
   + `${stuck.length ? '' : ', ninguna pisa a otra'}`);
 console.log(`contents.json lleva ${Object.keys(contents).length} contenidos, ${[...ids.values()].filter((c) => c.file).length} con vídeo y ${nums.size} con número para Max`);
+const varias = palabras.filter((p) => p.filas.length > 1);
+if (varias.length) {
+  console.log(`${varias.length === 1 ? 'una palabra lleva' : `${varias.length} palabras llevan`} varios vídeos. Sale una sola vez en el mapa, `
+    + 'cada vídeo va a la pantalla con su número y el móvil del público pone uno al azar:');
+  for (const p of varias) console.log(`  · «${p.etiqueta}», ${p.filas.length} vídeos (${p.filas.map((f) => f.num ?? `${f.id}, sin número`).join(', ')})`);
+}
 if (warnings.length) {
   console.log(`\n${warnings.length === 1 ? 'Hay un aviso' : `Hay ${warnings.length} avisos`}, pero he escrito el mapa igual.`);
   for (const w of warnings) console.log(`  · ${w}`);

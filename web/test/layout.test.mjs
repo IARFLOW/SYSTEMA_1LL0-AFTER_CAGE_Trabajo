@@ -121,13 +121,39 @@ test('las duraciones, escritas de cualquier manera', () => {
   assert.match(mal.stderr, /línea 2, la duración «un rato» no la entiendo/);
 });
 
-test('con etiquetas repetidas se avisa, y una relación por etiqueta pide el id', () => {
-  let r = layout(hoja({ conceptos: 'id,etiqueta\na,Ruido\nb,Ruido\nc,Azar\n', relaciones: 'origen,destino\na,c\n' }));
+// Guille, el 22-10-2026: el mismo concepto visto desde varias pantallas va en
+// varios vídeos con la misma palabra. Hasta entonces la palabra salía repetida
+// en el mapa, una vez por fila, y una relación por etiqueta pedía el id.
+test('las filas con la misma etiqueta son una sola palabra con varios vídeos, cada uno con su número', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,numero,seccion,nivel,x,y\npiedra,Piedra,1,T0,,,\nbosque_azul,bosque,,T2,2,300,400\n',
+    relaciones: 'origen,destino\nBosque,Piedra\nbosque_201,Gota\n',
+    media: { '200_Bosque_T0.mp4': 'x', '201_Bosque_T0.mp4': 'x', '202_bosque_T1_G.mp4': 'x', '300_Gota_T1.mp4': 'x' },
+  });
+  const r = layout(raiz);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /la etiqueta «Ruido» ya la tiene «a» en la línea 2/);
-  r = layout(hoja({ conceptos: 'id,etiqueta\na,Ruido\nb,Ruido\nc,Azar\n', relaciones: 'origen,destino\nRuido,Azar\n' }));
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /hay varios conceptos «Ruido»\. Escribe su id/);
+  const m = leer(raiz, 'map.json');
+  const c = leer(raiz, 'contents.json');
+  assert.deepEqual(m.nodes.map((n) => n.label).sort(), ['Gota', 'Piedra', 'bosque'], 'una palabra por etiqueta, sin mirar mayúsculas');
+  const bosque = m.nodes.find((n) => n.label === 'bosque');
+  assert.equal(bosque.id, 'bosque_azul', 'la palabra lleva el id de su primera fila');
+  assert.deepEqual(bosque.videos, ['bosque_azul', 'bosque', 'bosque_201', 'bosque_202']);
+  assert.ok(!('videos' in m.nodes.find((n) => n.label === 'Gota')), 'con un solo vídeo no hace falta la lista');
+  assert.deepEqual([bosque.x, bosque.y, bosque.lv], [300, 400, 2], 'la posición y el nivel, de la fila que los tiene');
+  assert.deepEqual(['bosque', 'bosque_201', 'bosque_202'].map((id) => c[id].num), [200, 201, 202], 'cada vídeo con su número para Max');
+  assert.equal(c.bosque_202.archivo, '202_bosque_T1_G.mp4');
+  // Las relaciones, por etiqueta o por el id de cualquiera de sus filas, y
+  // las de sección con la de cualquiera (Piedra en T0, Gota en T1), van a la palabra.
+  const unidas = new Set(m.links.map(([a, b]) => [a, b].sort().join('|')));
+  assert.ok(unidas.has('bosque_azul|piedra'));
+  assert.ok(unidas.has('bosque_azul|gota'));
+  assert.ok(m.links.every(([a, b]) => [a, b].every((id) => m.nodes.some((n) => n.id === id))), 'ninguna línea va a una fila que no es palabra');
+  assert.match(r.stdout, /«bosque», 4 vídeos \(bosque_azul, sin número, 200, 201, 202\)/);
+  assert.doesNotMatch(r.stdout, /ya la tiene/);
+
+  const mal = layout(hoja({ conceptos: 'id,etiqueta\na,Ruido\nb,Ruido\n', relaciones: 'origen,destino\na,b\n' }));
+  assert.equal(mal.status, 1);
+  assert.match(mal.stderr, /«a» y «b» son la misma palabra «Ruido»/);
 });
 
 test('una relación con una celda vacía dice qué falta', () => {

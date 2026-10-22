@@ -5,7 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +34,8 @@ before(async () => {
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=20', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-shortest', '-movflags', '+faststart', join(media, 'con.mp4')]);
   writeFileSync(join(media, 'roto.mp4'), Buffer.alloc(4096, 7));      // no es un vídeo
+  // Tres vídeos de la misma palabra, como los de Guille para varias pantallas.
+  for (const f of ['b1', 'b2', 'b3']) copyFileSync(join(media, 'con.mp4'), join(media, `${f}.mp4`));
   // Un audio, en negro y con su versión de móvil, como lo deja npm run versiones.
   mkdirSync(join(media, 'movil'));
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=25:d=20',
@@ -48,6 +50,10 @@ before(async () => {
     roto: { archivo: 'roto.mp4', duration: 10, num: 3 },
     otra: { duration: 10, num: 4 },
     voz: { archivo: 'voz.wav', duration: 20, num: 5 },
+    bosque: { archivo: 'b1.mp4', duration: 20, num: 200 },
+    bosque_201: { archivo: 'b2.mp4', duration: 20, num: 201 },
+    bosque_202: { archivo: 'b3.mp4', duration: 20, num: 202 },
+    bosque_sin: { duration: 20, num: 203 },
   }));
   writeFileSync(join(cat, 'map.json'), JSON.stringify({
     version: 2, width: 1400, height: 2000, font: { 1: 44, 2: 31, 3: 24 }, advance: 0.612,
@@ -57,6 +63,7 @@ before(async () => {
       { id: 'roto', label: 'Roto', lv: 1, x: 700, y: 1300 },
       { id: 'otra', label: 'Otra', lv: 3, x: 300, y: 400 },
       { id: 'voz', label: 'Voz', lv: 1, x: 700, y: 1600 },
+      { id: 'bosque', label: 'Bosque', lv: 1, x: 700, y: 400, videos: ['bosque', 'bosque_201', 'bosque_202', 'bosque_sin'] },
     ],
     links: [['con', 'sin'], ['con', 'otra', 'proceso'], ['sin', 'otra', 'medio']],
   }));
@@ -269,6 +276,44 @@ test('un móvil que espera en negro tiene un vídeo en marcha para no apagarse, 
 
 // Pedido el 21-10-2026. El altavoz sale en el móvil del público cuando lo que
 // suena es un audio, y nunca en las pantallas de la sala, músicos incluidos.
+// Guille, el 22-10-2026: el mismo concepto visto desde varias pantallas es una
+// sola palabra con varios vídeos.
+test('una palabra con varios vídeos pone uno al azar, otro al volver a tocarla, y se enciende con cualquiera', { skip, timeout: 40000 }, async () => {
+  const fichero = { 'b1.mp4': 'bosque', 'b2.mp4': 'bosque_201', 'b3.mp4': 'bosque_202' };
+  const puestos = [];
+  for (let i = 0; i < 4; i += 1) {
+    const p = await centro('bosque');
+    await b.tap(p.x, p.y);
+    await b.until(`!document.getElementById('player').hidden`, 4000);
+    const src = await b.evaluate(`document.getElementById('video').getAttribute('src')`);
+    const f = /^\/media\/(b[123]\.mp4)\?v=/.exec(src)?.[1];
+    assert.ok(f, `uno de los tres con fichero, nunca el que no lo tiene (${src})`);
+    assert.notEqual(f, puestos.at(-1), 'no repite el que acaba de ver');
+    puestos.push(f);
+    assert.equal(await b.evaluate(`document.getElementById('now-label').textContent`), 'Bosque');
+    // Al servidor le llega cuál de los vídeos es.
+    const re = new RegExp(`^mobile ${fichero[f]}$`, 'm');
+    for (let j = 0; j < 30 && !re.test(await health()); j += 1) await new Promise((r) => { setTimeout(r, 100); });
+    assert.match(await health(), re);
+    await b.evaluate(`document.getElementById('back').click()`);
+    await b.until(`document.getElementById('player').hidden`, 4000);
+  }
+  for (let j = 0; j < 30 && !/^mobile -$/m.test(await health()); j += 1) await new Promise((r) => { setTimeout(r, 100); });
+  assert.match(await health(), /^mobile -$/m, 'al cerrar, el servidor lo suelta');
+  // Max pone en una tele el tercero, y en el móvil se enciende la palabra.
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const verde = `document.querySelector('[data-id="bosque"]').classList.contains('active')`;
+  try {
+    await max.send('/tele1/video', 202);
+    await b.until(verde, 4000);
+    await max.send('/tele1/video', 0);
+    await b.until(`!${verde}`, 4000);
+  } finally {
+    await max.close();
+  }
+});
+
 test('un audio lleva el altavoz en el móvil del público, un vídeo no, y una pantalla de la sala nunca', { skip, timeout: 40000 }, async () => {
   const c = await (await fetch(`${base}/contents.json`)).json();
   assert.equal(c.voz.audio, true, 'el servidor lo marca por el registro');

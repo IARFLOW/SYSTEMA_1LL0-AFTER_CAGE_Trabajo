@@ -810,6 +810,60 @@ test('los vídeos se buscan en media/ en vivo, con versiones, tildes y duración
 
 // Lo que tiene que decir el servidor cuando algo de su sitio está roto, sin
 // llenar el registro (desde el 2-oct-2026).
+// Guille, el 22-10-2026: el mismo concepto visto desde varias pantallas es una
+// sola palabra con varios vídeos, cada uno con su número.
+test('una palabra con varios vídeos pone en cada pantalla el de su número, con el nombre de la palabra', async () => {
+  const cat = temporal('catalogo-varios');
+  writeFileSync(join(cat, 'contents.json'), JSON.stringify({
+    bosque: { file: null, duration: 60, num: 200 },
+    bosque_201: { file: null, duration: 60, num: 201 },
+    gota: { file: null, duration: 60, num: 300 },
+  }));
+  writeFileSync(join(cat, 'map.json'), JSON.stringify({
+    version: 2, width: 1400, height: 2000, font: { 1: 44, 2: 31, 3: 24 }, advance: 0.612,
+    nodes: [
+      { id: 'bosque', label: 'Bosque', lv: 1, x: 300, y: 300, videos: ['bosque', 'bosque_201'] },
+      { id: 'gota', label: 'Gota', lv: 1, x: 900, y: 900 },
+    ],
+    links: [],
+  }));
+  const other = startServer({ CATALOGO: cat });
+  let otroMax;
+  const abiertos = [];
+  try {
+    const port = Number(/0\.0\.0\.0:(\d+)/.exec(await other.waitFor(/web del público en http:\/\/0\.0\.0\.0:\d+/))[1]);
+    const osc = Number(/127\.0\.0\.1:(\d+)/.exec(await other.waitFor(/Max por OSC en 127\.0\.0\.1:\d+/))[1]);
+    await other.waitFor(/en el catálogo hay 3 conceptos, 0 con vídeo y 3 con número para Max/);
+    otroMax = new Client('127.0.0.1', osc);
+    const t1 = connect({ type: 'hello', role: 'screen', name: 'tele1' }, port);
+    const t2 = connect({ type: 'hello', role: 'screen', name: 'tele2' }, port);
+    const a = connect({ type: 'hello', role: 'phone' }, port);
+    const b = connect({ type: 'hello', role: 'phone' }, port);
+    abiertos.push(t1, t2, a, b);
+    await Promise.all(abiertos.map((x) => x.next(isSnapshot)));
+
+    const v1 = t1.next((m) => isVideo(m) && m.video);
+    const v2 = t2.next((m) => isVideo(m) && m.video);
+    const lit = b.next((m) => m.type === 'active' && m.active.includes('bosque') && m.active.includes('bosque_201'));
+    await otroMax.send('/tele1/video', 200);
+    await otroMax.send('/tele2/video', 201);
+    const [{ video: uno }, { video: dos }] = await Promise.all([v1, v2]);
+    assert.deepEqual([uno.id, uno.num, uno.label], ['bosque', 200, 'Bosque']);
+    assert.deepEqual([dos.id, dos.num, dos.label], ['bosque_201', 201, 'Bosque'], 'el segundo vídeo lleva el nombre de su palabra, no su id');
+    await lit;
+    await other.waitFor(/tele2 pone «Bosque»/);
+
+    // Lo que ve un móvil del público llega con el id de su vídeo.
+    const visto = b.next((m) => m.type === 'active' && m.mobile?.includes('bosque_201'));
+    a.ws.send(JSON.stringify({ type: 'phone:play', id: 'bosque_201' }));
+    await visto;
+  } finally {
+    for (const x of abiertos) x.close();
+    await otroMax?.close();
+    other.proc.kill();
+  }
+});
+
 test('un catálogo ilegible se apunta una vez, y un estado roto se dice', async () => {
   const vacio = temporal('catalogo-roto');
   const estado = estadoNuevo();

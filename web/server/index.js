@@ -332,7 +332,9 @@ function refreshCatalog() {
   try {
     sheetStamp = sheets.map((f) => statSync(f).mtimeMs).join();
     contents = JSON.parse(readFileSync(sheets[0], 'utf8'));
-    labels = new Map(JSON.parse(readFileSync(sheets[1], 'utf8')).nodes.map((n) => [n.id, n.label]));
+    // Una palabra con varios vídeos (sus «videos») da su nombre a cada uno.
+    labels = new Map(JSON.parse(readFileSync(sheets[1], 'utf8')).nodes
+      .flatMap((n) => (Array.isArray(n.videos) ? n.videos : [n.id]).map((id) => [id, n.label])));
   } catch (err) {
     if (!catalog.failed) log(`no puedo leer el catálogo (${err.message}); sigo con el anterior`);
     catalog.failed = true;

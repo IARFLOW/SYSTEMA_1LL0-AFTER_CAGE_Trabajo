@@ -48,7 +48,9 @@
     // en cuanto llega su primer mensaje o se abre su página.
     const FIXED = ['screen_01', 'screen_02', 'screen_03', 'screen_04', 'screen_05', 'screen_06'];
     const map = await fetch('/map.json').then((r) => r.json());
-    const labels = new Map(map.nodes.map((n) => [n.id, n.label]));
+    // Una palabra con varios vídeos sale una vez por vídeo, con su id detrás.
+    const videos = map.nodes.flatMap((n) => (n.videos ?? [n.id]).map((id) => ({ id, label: n.videos ? `${n.label} · ${id}` : n.label })));
+    const labels = new Map(videos.map((v) => [v.id, v.label]));
     const box = $('screens');
     const cards = new Map();
 
@@ -60,7 +62,7 @@
       div.querySelector('a').href = `/screen/${s}`;
       const sel = div.querySelector('select');
       sel.append(new Option('— nada —', ''));
-      for (const n of map.nodes) sel.append(new Option(n.label, n.id));
+      for (const v of videos) sel.append(new Option(v.label, v.id));
       const post = (content) => fetch(`/api/screen/${s}`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ content: content || null }),
