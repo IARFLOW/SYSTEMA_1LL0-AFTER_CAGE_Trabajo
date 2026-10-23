@@ -477,6 +477,10 @@ button {
   width: 16vmin;
   height: auto;
   pointer-events: none;
+  /* Su propia capa, como lo demás que va encima del vídeo. Sin ella, el
+     Safari del iPhone pinta el vídeo en marcha por encima y el altavoz no se
+     ve. Chrome sí lo enseñaba, y por eso las pruebas pasaban (Juanlu, 23-oct). */
+  z-index: 1;
 }
 .sim {
   display: grid;
