@@ -1,41 +1,37 @@
 # El router de la sala
 
-No sé qué router tenéis, así que esta guía vale para cualquiera. Sirve para
-saber si el vuestro vale, para dejarlo configurado y para comprobar antes de
-abrir que todo funciona. Si no vale, al final está el plan B, un GL.iNet
-Flint 2.
+Vuestro router es un TP-Link Archer AX53 (Juanlu mandó las fotos de la caja el
+12-10-2026). Esta guía sirve para dejarlo configurado y para comprobar antes
+de abrir que todo funciona. Dónde está cada ajuste en vuestro modelo lo tenéis
+en «En vuestro AX53, dónde está cada cosa». Si algo fallara, al final está el
+plan B, un GL.iNet Flint 2.
 
-En la sala, el router hace tres trabajos. Crea la Wi-Fi a la que se une el
-público con el QR del primer cartel. Da una dirección (una IP) a cada aparato.
-Y, si deja, hace que `systema.internal` lleve al Mac de Juanlu, que es el
-servidor. En él van la web del público, las páginas de las pantallas y el Max.
-Todo sin internet.
+En la sala, el router hace dos trabajos. Crea la Wi-Fi a la que se une el
+público con el QR del primer cartel, y da una dirección (una IP) a cada
+aparato. El AX53 no da nombres locales, así que todo va con la IP reservada
+del Mac de Juanlu, que es el servidor. En él van la web del público, las
+páginas de las pantallas y el Max. Todo sin internet.
 
-## Lo primero que os pido
+## Lo que todavía os pido
 
-Pa saber si vuestro router vale, pasadme estas cosas.
-
-- Una foto de la etiqueta (suele estar debajo) donde se vean la marca, el
-  modelo y la versión de hardware, la que pone «Ver.», «V» o «HW».
-- Si es de una operadora (Movistar, Vodafone, Orange, Digi…) o lo comprasteis
-  aparte. Los menús cambian mucho de uno a otro.
-- Si tiene 5 GHz. Si no lo sabéis, con la foto lo miro yo.
-- Si podéis, una captura del panel del router, de la parte de LAN o de DHCP.
-- Y si La Fábrica de Gomas tiene ya su propia Wi-Fi en la sala, para elegir
+- La versión de hardware, que la dice la pegatina del router, la que pone
+  «Ver:». En la caja pone «EU/1.0», pero la buena es la del router. La V2
+  trae un ajuste más (punto 3).
+- Si La Fábrica de Gomas tiene ya su propia Wi-Fi en la sala, para elegir
   canal.
 
 ## Qué tiene que dejar hacer
 
-Lo que decide si vuestro router vale es la 1, la 2, la 3 y la 7. La 4 y la 5
-son el nombre. Si no las tiene, el QR lleva la IP y funciona igual (más abajo,
-«Si el router no deja nombres locales»). Las demás son ajustes que conviene
-hacer.
+Lo que decide si un router vale es la 1, la 2, la 3 y la 7, y el AX53 las
+tiene. La 4 y la 5 son el nombre, y el vuestro no las tiene, así que el QR
+lleva la IP y funciona igual (más abajo, «Sin nombres locales, como el
+vuestro»). Las demás son ajustes que conviene hacer.
 
 ### 1. La IP del Mac, siempre la misma
 
-Por qué. `systema.internal` apunta a una IP, y las pantallas abren su página
-en esa IP o en ese nombre. Si un día el Mac recibe otra, ni los móviles ni las
-pantallas llegan. Una reserva hace que el router le dé siempre la misma.
+Por qué. Los QR, los carteles y las pantallas van a la IP del Mac. Si un día
+el Mac recibe otra, ni los móviles ni las pantallas llegan. Una reserva hace
+que el router le dé siempre la misma.
 
 Qué hacer. En el router, una reserva con la dirección MAC del Mac y la IP que
 queráis, fuera del reparto del punto 7 si el router deja. La MAC tiene que ser
@@ -79,8 +75,8 @@ Por cable, la IP sale en Ajustes del Sistema > Red, o en el script.
 
 ### 2. La Wi-Fi en 5 GHz
 
-Por qué. En la sala habrá hasta 25 móviles a la vez (el aforo que decidimos el
-23 de septiembre) bajando vídeo, más las pantallas que vayan por Wi-Fi. En
+Por qué. En la sala habrá hasta 30 móviles a la vez (20 de público y 10
+músicos el 29) bajando vídeo, más las pantallas que vayan por Wi-Fi. En
 España, en 2,4 GHz los canales son como mucho de 40 MHz, y en el bloque de
 5 GHz del punto 8, de 80 (wireless-regdb, la tabla de frecuencias que usa
 Linux). Es el doble de ancho para repartir.
@@ -88,10 +84,9 @@ Linux). Es el doble de ancho para repartir.
 Qué hacer. La Wi-Fi del público, en 5 GHz. Si el router junta las dos bandas
 con el mismo nombre, mejor separarlas o apagar la de 2,4 GHz, para que ningún
 móvil se quede en la lenta. Antes de apagarla, mirad que todo lo fijo que vaya
-por Wi-Fi tenga 5 GHz (la tablet Samsung vieja es la dudosa). Y que el router
-aguante a la vez los 25 móviles más las pantallas. Si su ficha dice cuántos
-aparatos admite, mejor. Si no lo dice, eso solo se sabe probando con gente, y
-con vuestro router no está probado.
+por Wi-Fi tenga 5 GHz (la tablet de Guille, la Samsung SM-P550, la tiene). Y
+que el router aguante a la vez los 30 móviles más las pantallas. Eso solo se
+sabe probando con gente, y con vuestro router no está probado.
 
 Cómo se mira. En el panel del router. Si el Mac está unido a esa Wi-Fi, el
 script dice la banda y el canal. En Android, en los detalles de la red suele
@@ -115,6 +110,11 @@ esto es lo primero que miraría, y después el cortafuegos del Mac
 
 ### 4. El nombre systema.internal
 
+Con el AX53 esto no aplica, porque no da nombres locales (no tiene DNS local
+ni hosts, lo confirma un empleado de TP-Link en su foro). Lo dejo por si un
+día va otro router. Lo único que sí os toca es que reparta su propia IP como
+DNS (el último párrafo de «Qué hacer»).
+
 Por qué. Es la dirección del QR del mapa, y se teclea mejor que una IP. El
 final `.internal` está reservado para redes privadas (ICANN, resolución
 2024.07.29.06). No existe en internet y no choca con ninguna web de verdad. No
@@ -130,12 +130,15 @@ Cómo se mira. El script dice «systema.internal lleva a …, que es este Mac».
 mano, se le pregunta al router así (con la IP de vuestro router).
 
 ```
-dig +short systema.internal @192.168.1.1
+dig +short systema.internal @192.168.0.1
 ```
 
-Tiene que salir la IP del Mac.
+Tiene que salir la IP del Mac. Con el AX53 no sale nada, y es lo normal.
 
 ### 5. La comprobación de los iPhone
+
+Con el AX53 esto tampoco aplica, por lo mismo que el punto 4. Los iPhone
+avisarán de que la red no tiene internet, y la web va igual.
 
 Por qué. Al unirse a una Wi-Fi, cada móvil pregunta a una dirección de su
 fabricante si hay internet. El iPhone pregunta a `captive.apple.com` (Apple,
@@ -182,17 +185,17 @@ del público es un aparato distinto y llega con su propia dirección MAC, así
 que se queda con una IP hasta que vence su concesión, aunque se haya ido hace
 rato. Si se acaban las IP, el siguiente no puede ni entrar en la Wi-Fi.
 
-La cuenta. OpenWrt, en el que se basan routers como el GL.iNet, viene de
-fábrica con 150 direcciones y concesiones de 12 h (su guía de DHCP). Con eso,
-en cuanto pasan unos 150 móviles distintos en 12 horas, se acaban. Con un
-aforo de 25, basta con que la sala se llene y se vacíe seis veces en un día.
-Con concesiones de 1 h solo cuentan los de la última hora. Con un reparto de
-la .20 a la .250, para llenarlo harían falta más de 200 personas distintas en
-una hora, ocho veces el aforo.
+La cuenta. Vuestro AX53 viene de fábrica con el reparto de la 192.168.0.100 a
+la 192.168.0.249, que son 150 direcciones, y concesiones de 120 minutos (su
+manual). Con eso, en cuanto pasan 150 móviles distintos en dos horas, se
+acaban, y son cinco veces los 30 del día de los músicos. Con concesiones de
+1 h solo cuentan los de la última hora. Con un reparto de la .20 a la .249,
+para llenarlo harían falta más de 200 personas distintas en una hora.
 
-Qué hacer. Concesión de 1 h y el reparto más grande que deje el router. En una
-red de casa normal (la del router acaba en .1), de la .20 a la .250. La IP del
-Mac, fuera del reparto si el router deja, por ejemplo la .10.
+Qué hacer. Concesión de 1 h (en el AX53 va en minutos, así que 60) y el
+reparto más grande que deje el router, de la 192.168.0.20 a la
+192.168.0.249. La IP del Mac, fuera del reparto si el router deja, por
+ejemplo la 192.168.0.10.
 
 Cómo se mira. En el panel del router. El script dice además por cuánto tiempo
 le presta el router la IP al Mac, que da una pista.
@@ -232,9 +235,28 @@ clave, WPA2 o WPA2/WPA3 mixto (solo WPA3 no lo he comprobado con el QR). El QR
 del primer cartel ya la lleva dentro, así que al público no le cuesta nada, y
 con clave el Mac usa su dirección privada Fija (punto 1). El nombre de la red y
 la clave, con letras y números, sin punto y coma, sin barra invertida y sin
-comillas, que alguno lo teclea a mano.
+comillas, que alguno lo teclea a mano. La tablet de Guille no tiene WPA3, así
+que solo WPA3 la dejaría fuera.
+
+## En vuestro AX53, dónde está cada cosa
+
+Son las rutas de los manuales oficiales de la V1 y la V2
+(tp-link.com/es/support/download/archer-ax53, los miré el 12-10-2026). El
+router está en `http://192.168.0.1`. No lo he probado en un AX53 de verdad.
+
+| Lo que buscáis | Dónde está |
+|---|---|
+| La reserva (1) | Advanced > Network > DHCP Server > Address Reservation. El Mac en 192.168.0.10, con la MAC que da el script |
+| El reparto (7) | Advanced > Network > DHCP Server, «IP Address Pool». De fábrica, de la 192.168.0.100 a la .249. Mejor de la .20 a la .249 |
+| La concesión (7) | En esa misma página, «Address Lease Time», en minutos. De fábrica 120, mejor 60 |
+| El DNS que reparte (4) | En esa misma página, el DNS primario, que es opcional. Vacío, para que reparta el suyo |
+| Canal y ancho (2 y 8) | Advanced > Wireless > Wireless Settings. Solo deja elegirlos con Smart Connect apagado, que es lo que junta las dos bandas con un mismo nombre. Canal 36 y 80 MHz |
+| El aislamiento (3) | «AP Isolation», en Advanced > Wireless > Additional Settings, apagado. La V2 trae además «Device Isolation», en Advanced > Security, que también tiene que ir apagado |
+| El nombre (4 y 5) | No lo tiene. Todo va con la IP, y los carteles se sacan con `--web http://192.168.0.10/` |
 
 ## Cómo se llaman estos ajustes
+
+Si un día va otro router, esto sirve para encontrarlos.
 
 Cada router los pone en un menú distinto (LAN, DHCP, Wi-Fi, Inalámbrico,
 Avanzado…), en español o en inglés. Estos son los nombres que suelen tener.
@@ -254,14 +276,14 @@ Avanzado…), en español o en inglés. Estos son los nombres que suelen tener.
 | La contraseña del panel (9) | contraseña de administrador, contraseña de acceso, admin password |
 | La clave de la Wi-Fi | seguridad, cifrado, WPA2-PSK, WPA2-Personal, WPA2/WPA3 |
 
-## Si el router no deja nombres locales
+## Sin nombres locales, como el vuestro
 
 No pasa ná grave. El QR del mapa lleva la IP del Mac en vez del nombre, y
 funciona igual. Los carteles se sacan en la carpeta `web`, con vuestra red,
 vuestra clave y la IP reservada del Mac (la que da el script).
 
 ```
-npm run carteles -- --red SYSTEMA --clave unaclave --web http://192.168.1.10/
+npm run carteles -- --red SYSTEMA --clave unaclave --web http://192.168.0.10/
 ```
 
 Lo que se pierde es la comprobación de los iPhone (punto 5), así que el iPhone
@@ -270,12 +292,12 @@ exactamente el iPhone con vuestro router hay que verlo en la prueba. Todo lo
 demás hace falta igual, sobre todo la reserva, porque con la IP en el QR, si el
 Mac cambia de IP, el QR deja de valer.
 
-Si el nombre funciona, la IP va también en el cartel, en letra y en un QR
-pequeño, por si algún móvil no abre el nombre. Entonces los carteles se sacan
-así.
+Con un router que sí dé nombres, la IP va también en el cartel, en letra y en
+un QR pequeño, por si algún móvil no abre el nombre. Entonces los carteles se
+sacan así.
 
 ```
-npm run carteles -- --red SYSTEMA --clave unaclave --ip 192.168.1.10
+npm run carteles -- --red SYSTEMA --clave unaclave --ip 192.168.0.10
 ```
 
 ## La comprobación antes de abrir
@@ -294,14 +316,22 @@ sh sala/router/comprobar-red.sh
 
 No cambia nada ni pide contraseña. De cada cosa dice «ok», «ojo» (hay que
 arreglarlo) o «mira» (no se puede ver desde aquí, o depende de vosotros).
-Tiene que salir «ok» en el nombre, en la web por la IP y por el nombre, en la
-comprobación de los iPhone y, si el Mac está unido a la Wi-Fi de la sala, en la
-banda y el canal. Al final dice qué poner en los carteles. Si sale algún «ojo»,
-en esta tabla tenéis qué pasa.
+Con el AX53 tiene que salir «ok» en la web por la IP y, si el Mac está unido a
+la Wi-Fi de la sala, en la banda y el canal. El nombre y la comprobación de los
+iPhone salen como «mira», porque el router no da nombres, y es lo normal con
+el vuestro. Al final dice qué poner en los carteles. Si sale algún «ojo», o un
+«mira» que no entendáis, en esta tabla tenéis qué pasa.
+
+Hay una cosa que no está medida, qué contesta el DNS del AX53 sin cable de
+internet. Si contesta que no conoce el nombre, salen los dos «mira» de arriba.
+Si no contesta, sale «el DNS del router no contesta» como «ojo», y entonces
+los móviles esperarían su respuesta al unirse. El 26 mirad cuál de las dos
+sale de verdad y apuntadlo.
 
 | Si dice | Qué pasa |
 |---|---|
-| el DNS del router no conoce systema.internal | Falta el nombre en el router (punto 4). Si no deja, carteles con la IP. |
+| el router no da nombres (mira) | Lo normal con el AX53. Los carteles van con la IP. |
+| los iPhone avisarán de que la red no tiene internet (mira) | Lo normal con el AX53 (punto 5). La web va igual. |
 | systema.internal lleva a otra IP | El nombre apunta a una IP vieja, o el Mac no tiene su reserva (punto 1). |
 | el DNS que reparte el router no contesta | Reparte un DNS de fuera, como 8.8.8.8. Tiene que repartir el suyo (punto 4). |
 | el DNS del router no contesta | Mirad que el Mac esté en la red del router de la sala. |
@@ -313,7 +343,6 @@ en esta tabla tenéis qué pasa.
 | no recibe «Success» | La web no está en el 80, o no está en marcha. |
 | captive.apple.com lleva a otro aparato | Que apunte al Mac o a nada (punto 5). |
 | captive.apple.com sale a internet | El router tiene internet (punto 6). |
-| el router no manda captive.apple.com a este Mac | Falta apuntarlo (punto 5). Si el router no deja, se queda así. |
 | 2,4 GHz, DFS o poca potencia | Puntos 2 y 8. |
 | la Wi-Fi de la sala va sin clave | Ver «La clave de la Wi-Fi». |
 
@@ -321,21 +350,20 @@ Las líneas «mira» dicen la MAC que va en la reserva, por cuánto tiempo prest
 el router la IP, si reparte más de un DNS, si el Mac tiene más de una IP y si
 la comprobación de Android también llega al Mac (punto 5).
 
-En casa, con otro router, es normal que salgan varios «ojo», porque no está el
-nombre y hay internet. Con el servidor en otro puerto, se lanza con
+En casa, con otro router, es normal que salga algún «ojo», porque hay
+internet. Con el servidor en otro puerto, se lanza con
 `sh sala/router/comprobar-red.sh --puerto 8090`.
 
-Por si hace falta mirarlo a mano, son estos tres comandos (con la IP de
-vuestro router).
+Por si hace falta mirarlo a mano, son estos dos comandos (con la IP de
+vuestro router y la del Mac).
 
 ```
-dig +short systema.internal @192.168.1.1
-curl http://systema.internal/health
-curl http://captive.apple.com/hotspot-detect.html
+dig +short systema.internal @192.168.0.1
+curl http://192.168.0.10/health
 ```
 
-El primero tiene que dar la IP del Mac, el segundo `ok` y el tercero una
-página con `Success`, si se ha apuntado al Mac.
+El primero, con el AX53, no tiene que dar nada (si da una IP, alguien ha
+puesto un DNS por medio). El segundo tiene que dar `ok`.
 
 Desde el propio Mac no se ve si el cortafuegos deja pasar a los móviles. Eso
 lo mira `sh sala/mac/comprobar.sh`, y del todo, solo un móvil.
@@ -344,7 +372,7 @@ lo mira `sh sala/mac/comprobar.sh`, y del todo, solo un móvil.
 
 Es la prueba que más importa, y lo que más puede fallar en la sala es un
 Android con los datos encendidos. Mientras la Wi-Fi no tenga internet, Android
-sigue sacándolo todo por los datos, y por ahí `systema.internal` no existe
+sigue sacándolo todo por los datos, y por ahí la IP del Mac no se alcanza
 (lo miré en el código de Android). Solo pasa a la Wi-Fi
 cuando el visitante acepta quedarse en ella. El aviso sale como notificación
 unos 8 s después de unirse. Pone «SYSTEMA no tiene acceso a Internet» y debajo
@@ -369,10 +397,10 @@ móviles que no conozcan todavía la red.
    marcado. Probad otra vez y apuntad si así abre.
 6. Si sigue sin abrir, apagad los datos móviles y probad otra vez. Así tiene
    que abrir siempre.
-7. Probad también la IP escrita a mano, `http://<IP del Mac>/`, con datos y sin
-   datos.
+7. Probad también la dirección escrita a mano, `http://192.168.0.10/` (la IP
+   del Mac), con datos y sin datos.
 
-Tiene que salir el mapa, por el nombre, siempre con los datos apagados, y con
+Tiene que salir el mapa siempre con los datos apagados, y con
 los datos encendidos como mucho después de aceptar el aviso. En el iPhone,
 ninguna ventana de «iniciar sesión» y la primera carga, rápida.
 
@@ -380,15 +408,12 @@ ninguna ventana de «iniciar sesión» y la primera carga, rápida.
 |---|---|
 | Sin datos abre, con datos no abre ni aceptando el aviso | Es lo de Android y los datos. El cartel ya pide apagarlos. Apuntad marca, modelo y versión de Android. |
 | No abre ni sin datos, y el script del Mac da todo bien | El aislamiento (punto 3) o el cortafuegos del Mac. |
-| Abre por la IP pero no por el nombre, en todos los móviles | El router no da el nombre a los móviles. Mirad qué DNS reparte (punto 4). |
-| Un solo Android abre por la IP pero no por el nombre | Tiene un DNS privado puesto a mano (en sus ajustes de red, «DNS privado» con un nombre de proveedor). Sin internet no le contesta. Por la IP le funciona. |
 | El iPhone abre solo una ventana de «iniciar sesión» al unirse | Algo contesta mal a captive.apple.com (punto 5). No pulséis Cancelar, que se sale de la Wi-Fi. Hay que arreglar el router. |
 | El iPhone tarda unos segundos la primera vez y luego va rápido | El modo encubierto del cortafuegos del Mac. Safari, desde iOS 18.2, prueba primero HTTPS, y si el Mac no rechaza la conexión al momento espera hasta unos 3 s (WebKit). Se quita en Ajustes del Sistema > Red > Firewall > Opciones > Activar modo encubierto. |
-| El iPhone dice que la red no tiene internet, pero abre | Normal si su comprobación no va al Mac (punto 5). |
+| El iPhone dice que la red no tiene internet, pero abre | Lo normal con el AX53, porque su comprobación no llega al Mac (punto 5). |
 
 Apuntad lo que pase con cada móvil (marca, modelo, versión, navegador, si
-salió aviso y cuál, y si abrió por el nombre y por la IP, con datos y sin
-ellos) y pasádmelo, que con eso cierro el texto de los carteles.
+salió aviso y cuál, y si abrió, con datos y sin ellos) y pasádmelo, que con eso cierro el texto de los carteles.
 
 ### Un corte de luz de mentira
 
@@ -485,6 +510,9 @@ cualquier router.
 ## Lo que no está probado
 
 - Nada de esto, con vuestro router ni con un Flint 2.
+- Qué contesta el DNS del AX53 sin cable de internet, si que no conoce el
+  nombre (y el script lo dice como «mira») o nada (y sale «ojo»). Se mira el 26
+  con `sh sala/router/comprobar-red.sh`.
 - El script lo he probado en mi Mac (macOS 26.7) con un DNS de mentira. Ahí
   probé el nombre al Mac, a otra IP y sin contestar, la comprobación de los
   iPhone al Mac y a otro aparato, y la web en otro puerto y con otro programa
@@ -493,7 +521,7 @@ cualquier router.
 - Qué hace el iPhone si el 80 contesta «Success» y el 443 no contesta.
 - Si el aviso de Android sale cuando uno se une con el QR, y si un Android con
   datos llega a la IP sin aceptarlo.
-- Si Samsung Internet abre `http://systema.internal/`, que tiene su propio modo
-  HTTPS, y Samsung no cuenta cómo trata los nombres locales.
+- Si Samsung Internet abre `http://192.168.0.10/` a la primera, que tiene su
+  propio modo HTTPS y Samsung no cuenta cómo lo aplica.
 - Si la cámara de un Huawei sin Google se une a la Wi-Fi con el QR. El cartel
   lleva la red y la clave en letra, por si no.

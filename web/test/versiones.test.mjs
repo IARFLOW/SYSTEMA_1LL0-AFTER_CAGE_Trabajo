@@ -231,3 +231,56 @@ test('solo avisa de HDR cuando lo es, no por la matriz Rec.2020 sola', { skip },
   assert.ok(!m.masters['touch.mp4'].avisos.some((a) => /HDR/.test(a)), m.masters['touch.mp4'].avisos.join(' · '));
   assert.ok(m.masters['pq.mp4'].avisos.some((a) => /HDR/.test(a)), 'el de PQ sí avisa');
 });
+
+// Guille pasa sus masters y Juanlu sus audios, cada uno desde su carpeta y al
+// mismo media/. Cada pasada borraba del registro lo que no estaba en su
+// carpeta, y con eso el «soloAudio» de los audios y el altavoz del móvil.
+test('dos carpetas de masters al mismo media/ no se borran el registro la una a la otra', { skip }, () => {
+  const audios = join(dir, 'de-juanlu');
+  const videos = join(dir, 'de-guille');
+  const salida = join(dir, 'dos-media');
+  mkdirSync(audios);
+  mkdirSync(videos);
+  ff('-f', 'lavfi', '-i', 'sine=duration=1', '-ac', '2', join(audios, '300_Lluvia_T0.wav'));
+  ff('-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=1', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(videos, '200_Bosque_T0.mp4'));
+  const pasar = (carpeta) => spawnSync(process.execPath, [script, '--masters', carpeta, '--media', salida, '--solo', 'movil'], { encoding: 'utf8' });
+  const registro = () => JSON.parse(readFileSync(join(salida, 'versiones.json'), 'utf8')).masters;
+  let r = pasar(audios);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = pasar(videos);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  let m = registro();
+  assert.equal(m['300_Lluvia_T0.wav']?.soloAudio, true, 'el audio de la otra carpeta sigue siendo audio');
+  assert.equal(m['200_Bosque_T0.mp4'].soloAudio, undefined);
+  // Sin su vídeo en media/, la entrada ya sí sobra.
+  rmSync(join(salida, 'movil', '300_Lluvia_T0.mp4'));
+  r = pasar(videos);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  m = registro();
+  assert.ok(!('300_Lluvia_T0.wav' in m), 'lo que no tiene ni master ni vídeo se quita');
+  assert.ok('200_Bosque_T0.mp4' in m);
+});
+
+// Un master a medio copiar no tiene el índice, que en un .mov o en un MP4 sin
+// +faststart va al final. Salía el error crudo de ffprobe, la cabecera decía
+// «todo está hecho» y terminaba bien.
+test('un master a medio copiar se explica y la pasada sale con error, y se dice lo que no se mira', { skip }, () => {
+  const otro = join(dir, 'a-medias');
+  mkdirSync(otro);
+  mkdirSync(join(otro, 'T1'));
+  ff('-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(dir, 'entero.mp4'));
+  const entero = readFileSync(join(dir, 'entero.mp4'));
+  writeFileSync(join(otro, 'cortado.mp4'), entero.subarray(0, Math.floor(entero.length / 2)));
+  // Como lo deja TouchDesigner con «Unique Suffix».
+  ff('-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=1', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(otro, '200_Bosque_T0.mov.0.mov'));
+  const salida = join(dir, 'a-medias-media');
+  const r = spawnSync(process.execPath, [script, '--masters', otro, '--media', salida, '--solo', 'movil'], { encoding: 'utf8' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /2 masters en .*\(uno no se puede leer\)/);
+  assert.match(r.stdout, /✗ cortado\.mp4 · no se puede leer, le falta el final/);
+  assert.match(r.stdout, /Hay un master que no se puede leer/);
+  assert.doesNotMatch(r.stdout + r.stderr, /moov atom/, 'sin el error crudo de ffprobe');
+  assert.match(r.stdout, /la carpeta T1 no la miro/);
+  assert.match(r.stdout, /200_Bosque_T0\.mov\.0\.mov lleva «\.mov\.0» detrás.*renombrarlo a 200_Bosque_T0\.mov/);
+  assert.ok(existsSync(join(salida, 'movil', '200_Bosque_T0.mov.0.mp4')), 'el bueno sale igual, y con su nombre de siempre');
+});

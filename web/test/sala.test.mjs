@@ -693,6 +693,35 @@ test('en producción /dev no existe, ni escrito de otra forma, y van las cabecer
   }
 });
 
+// En la sala (sin --dev), un concepto que no tiene su vídeo en media/ no se
+// enciende en el mapa cuando Max lo pide. Antes se ponía verde en todos los
+// móviles sin que sonara nada.
+test('en la sala, un número cuyo vídeo no está en media/ deja la pantalla en negro y no enciende la palabra', async () => {
+  const prod = startServer({}, []);
+  let otroMax;
+  const abiertos = [];
+  try {
+    const port = Number(/0\.0\.0\.0:(\d+)/.exec(await prod.waitFor(/web del público en http:\/\/0\.0\.0\.0:\d+/))[1]);
+    const osc = Number(/127\.0\.0\.1:(\d+)/.exec(await prod.waitFor(/Max por OSC en 127\.0\.0\.1:\d+/))[1]);
+    const t1 = connect({ type: 'hello', role: 'screen', name: 'tele1' }, port);
+    const panel = connect({ type: 'hello', role: 'panel' }, port);
+    abiertos.push(t1, panel);
+    await Promise.all([t1.next(isSnapshot), panel.next((m) => m.type === 'panel')]);
+    otroMax = new Client('127.0.0.1', osc);
+    const dicho = panel.next((m) => m.type === 'panel' && m.osc.some((o) => o.level === 'warn' && /«Concepto 3» no tiene vídeo en media\/ · tele1 en negro/.test(o.result)));
+    await otroMax.send('/tele1/video', 3);
+    const visto = await dicho;
+    assert.deepEqual(visto.active, [], 'no se enciende');
+    assert.ok(Number.isFinite(visto.osc[0].ms), 'cada mensaje de Max lleva su hora, para «último mensaje hace»');
+    await prod.waitFor(/«Concepto 3» no tiene su vídeo en media\/, así que tele1 se queda en negro/);
+    assert.match(await (await fetch(`http://127.0.0.1:${port}/health`)).text(), /^active -$/m);
+  } finally {
+    for (const x of abiertos) x.close();
+    await otroMax?.close();
+    prod.proc.kill();
+  }
+});
+
 test('las comprobaciones de conectividad de los móviles reciben lo que esperan', async () => {
   const pide = (ruta, host) => fetch(`http://127.0.0.1:${http}${ruta}`, { headers: { Host: host } });
   const apple = await pide('/hotspot-detect.html', 'captive.apple.com');
@@ -852,6 +881,11 @@ test('una palabra con varios vídeos pone en cada pantalla el de su número, con
     assert.deepEqual([dos.id, dos.num, dos.label], ['bosque_201', 201, 'Bosque'], 'el segundo vídeo lleva el nombre de su palabra, no su id');
     await lit;
     await other.waitFor(/tele2 pone «Bosque»/);
+    // En el panel, la palabra sale una vez aunque suenen dos de sus vídeos.
+    const panel = connect({ type: 'hello', role: 'panel' }, port);
+    abiertos.push(panel);
+    const enPanel = await panel.next((m) => m.type === 'panel' && m.active.length > 0);
+    assert.deepEqual(enPanel.active, ['Bosque']);
 
     // Lo que ve un móvil del público llega con el id de su vídeo.
     const visto = b.next((m) => m.type === 'active' && m.mobile?.includes('bosque_201'));
@@ -929,6 +963,35 @@ test('el panel ve cada pantalla y le llegan sus órdenes; desde fuera, solo con 
     fuera.send(JSON.stringify({ type: 'hello', role: 'panel' }));
     assert.equal(await closedWith(fuera), 1008);
   }
+});
+
+// Los avisos se borran desde el panel (por la mañana salían los de ayer), y
+// «recargar todas» llega a cada pantalla abierta, que es lo que hace falta
+// después de actualizar el repo.
+test('el panel borra los avisos y recarga todas las pantallas a la vez', async () => {
+  const a = screen('tele12');
+  const b = screen('tele13');
+  await Promise.all([a.next(isSnapshot), b.next(isSnapshot)]);
+  a.ws.send(JSON.stringify({ type: 'screen:status', sound: true, playing: null, error: 'no puedo poner «Otra»' }));
+  const panel = connect({ type: 'hello', role: 'panel' });
+  await panel.next((m) => m.type === 'panel' && m.avisos.some((x) => /tele12 · no puedo poner «Otra»/.test(x.text)));
+  const limpio = panel.next((m) => m.type === 'panel' && m.avisos.length === 0);
+  panel.ws.send(JSON.stringify({ type: 'panel:clear' }));
+  await limpio;
+  const recargas = Promise.all([a.next((m) => m.type === 'reload'), b.next((m) => m.type === 'reload')]);
+  panel.ws.send(JSON.stringify({ type: 'panel:reload' }));
+  await recargas;
+  // Solo el panel borra los avisos. Un móvil que lo intenta no cambia nada.
+  a.ws.send(JSON.stringify({ type: 'screen:status', sound: true, playing: null, error: 'otro fallo' }));
+  await panel.next((m) => m.type === 'panel' && m.avisos.length === 1);
+  const p = phone();
+  await p.next(isSnapshot);
+  p.ws.send(JSON.stringify({ type: 'panel:clear' }));
+  await sleep(400);
+  const sigue = panel.next((m) => m.type === 'panel');
+  a.ws.send(JSON.stringify({ type: 'screen:status', sound: true, playing: null, error: null }));
+  assert.equal((await sigue).avisos.length, 1, 'el aviso sigue ahí');
+  for (const x of [a, b, panel, p]) x.close();
 });
 
 test('con PANEL_CLAVE, el panel se abre desde otro aparato de la red', async () => {

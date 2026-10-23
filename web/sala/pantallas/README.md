@@ -22,6 +22,10 @@ algo, pero el reparto lo decidís vosotros.
 
 - Abre un Chrome por pantalla, en modo quiosco (sin barras ni avisos) y sonando
   sin que nadie la toque.
+- Las dos ventanas de un mismo ordenador suenan por la misma salida de sonido
+  del sistema, así que conviene repartirlas con como mucho una pantalla con
+  sonido por ordenador. En el M4 esa salida puede ser la misma interfaz que usa
+  el Max.
 - Las reparte de izquierda a derecha, según estén colocadas en el sistema. En
   el Mac es Ajustes del Sistema > Pantallas > Organizar, y en Windows,
   Configuración > Sistema > Pantalla. El primer nombre va en la de más a la

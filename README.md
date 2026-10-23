@@ -9,6 +9,7 @@ Cada vez que cambie algo lo subo aquí.
 - en esta misma página, el botón verde **Code** y luego **Download ZIP**
 - lo descomprimís y dentro está todo
 - pa tener lo último, lo mismo otra vez (y si usáis git, con un `git pull` vale)
+- cada vez que os bajéis lo último hay que reiniciar el servidor, cerrando la terminal y arrancando otra vez, y luego en /panel le dais a recargar todas, que si no las pantallas que estén abiertas siguen con lo de antes. los ipads y la tablet se vuelven a tocar
 
 
 ## Lo primero, node
@@ -33,6 +34,7 @@ Cada vez que cambie algo lo subo aquí.
 - cada pestaña de /screen es una tele. la arrastras al monitor que quieras y haces clic una vez dentro, que así suena y se pone a pantalla completa (con Esc sale)
 - pa las pantallas por cable de la sala ya no hace falta arrastrarlas, `web/sala/pantallas` abre cada una a pantalla completa en su sitio y la vuelve a poner si se desenchufa y se enchufa otra vez. cómo se usa lo tenéis en su README
 - en /panel ves cada mensaje que llega del max y qué ha hecho el servidor con él, así que si algo no cuadra se ve al momento
+- ahí mismo sale cuánto hace del último mensaje del max, y con borrar avisos dejáis la lista limpia pa empezar el día
 - ahí también sale cada tele, lo que está poniendo y si suena o le falta el toque, y con identificar sale su nombre en grande en esa pantalla, pa saber cuál es cuál cuando tengas varias
 - si quieres poner vídeos a mano sin el max, en /dev eliges qué pone cada tele
 - el 0 deja la tele en negro
@@ -89,6 +91,7 @@ npm run layout
 - una celda puede llevar varios separados por comas, y `relaciones.csv` sigue valiendo pa unir dos a mano
 - y si los vídeos se llaman número_Palabra_Sección_Proceso, tipo 101_Piedra_T0_G, al pasar el layout se añaden solos al final de `conceptos.csv`, con el número, la palabra, la sección y el proceso en sus columnas. luego solo les ponéis el nivel o el medio si queréis
 - la palabra puede llevar espacios y tildes, tipo 102_Cámara anecoica_T1_F, pero sin _ dentro, que es lo que separa las partes
+- si touchdesigner os deja .mov.0 detrás del nombre se lee bien igual, pero mejor quitar el unique suffix del movie file out. y si algún nombre no se puede leer, o hay un .mov suelto en media, el layout os lo dice
 - las filas que ya estaban no se tocan, y si un número ya lo tiene otra fila os avisa y no la añade
 - antes de pasar el layout cerrad la hoja, que si está abierta en excel y la guardáis después se pierden las filas nuevas
 
@@ -99,12 +102,14 @@ npm run layout
 - en el móvil del público llevan encima un altavoz, pa que se sepa que está sonando algo. en las teles, los monitores, los proyectores, los ipads y los móviles de los músicos no sale
 - el dibujo es `web/public/altavoz.png`. si queréis otro cambiáis ese fichero, y si lo borráis no sale ninguno
 - si ya los teníais convertidos, lanzad otra vez `npm run versiones` y en un momento apunta cuáles son audios, sin convertir nada otra vez
+- aunque paséis los masters desde carpetas distintas, los audios no pierden el altavoz mientras sus vídeos sigan en media
 
 
 ## Si algo falla
 
 - si la terminal dice que el puerto 8080 lo tiene otro programa, cerrad ese programa o arrancad en otro. en la Terminal escribís `PORT=8090 sh` con un espacio, arrastráis arrancar.command y le dais a Intro
 - si en /panel, donde pone escucha en, sale SIN PUERTO, es que otro programa tiene el 9100, puede ser algún udpreceive 9100 dentro del max
+- si el max pide un número cuyo vídeo no está en media, esa tele se queda en negro, la palabra no se enciende y en /panel sale el aviso
 - y cualquier cosa me escribís por el grupo y lo vemos
 
 

@@ -278,8 +278,12 @@ SUFIJO=""
 echo ""
 echo "  listo, el servidor arranca solo cada vez que se inicia sesión en este usuario"
 echo ""
-echo "  web del público   http://systema.internal$SUFIJO/  (con el router de la sala)"
-[ -z "$IP" ] || echo "                    http://$IP$SUFIJO/"
+if [ -n "$IP" ]; then
+  echo "  web del público   http://$IP$SUFIJO/"
+  echo "                    http://systema.internal$SUFIJO/  (solo si el router da nombres)"
+else
+  echo "  web del público   http://systema.internal$SUFIJO/  (solo si el router da nombres)"
+fi
 echo "  pantallas         http://<esta dirección>$SUFIJO/screen/tele1, tele2…"
 [ -z "$PANTALLAS" ] || echo "  las de la sala    $(printf '%s' "$PANTALLAS" | sed 's/,/, /g')  (el panel dice cuál falta)"
 echo "  panel de la sala  http://localhost$SUFIJO/panel"

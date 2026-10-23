@@ -23,8 +23,10 @@ porqué, pa que sepas qué tocas en tu Mac y por qué te lo pido.
    sh sala/mac/instalar.sh --pantallas tele1,tele2,monitor1,monitor2,proyector1,proyector2
    ```
 
-   Deja la web en el puerto 80 (así `http://systema.internal/` va sin número) y
-   escucha al Max en el 9100. Si el cortafuegos del Mac está activado y no
+   Deja la web en el puerto 80 (así `http://192.168.0.10/`, con la IP de tu
+   Mac, va sin número) y escucha al Max en el 9100. Al acabar te dice la
+   dirección con la IP, que es la buena con vuestro router. La de
+   `systema.internal` solo valdría con un router que dé nombres. Si el cortafuegos del Mac está activado y no
    dejaría entrar a los móviles, lo arregla, y para eso te pide la contraseña
    del Mac. Con la lista, el panel te dice qué tele falta aunque no se haya
    encendido nunca.
@@ -46,12 +48,39 @@ sh sala/mac/desinstalar.sh   quitarlo (el registro se queda en ~/Library/Logs/Sy
 Para abrir el panel desde el móvil de quien abra la sala, instala con una
 clave de letras, números, `_` y `-`, de 12 como poco. Sería
 `sh sala/mac/instalar.sh --clave-panel unaclavelarga`, y luego
-`http://systema.internal/panel?clave=unaclavelarga`. Sin clave, el panel solo
-se abre desde el propio Mac.
+`http://192.168.0.10/panel?clave=unaclavelarga`, con la IP de tu Mac. Sin
+clave, el panel solo se abre desde el propio Mac.
 
 Las pantallas que van por cable a este Mac se abren solas con
 `sh sala/pantallas/mac.sh --instalar tele1 tele2`, cada una con su nombre del
 Max. Lo cuenta `sala/pantallas/README.md`, que vale también para el de 2018.
+`comprobar.sh` te dice si en este Mac están puestas para abrirse solas.
+
+## El 29, con los músicos
+
+El 29 hay diez pantallas más, los móviles de los músicos, de `musico1` a
+`musico10`. Esa mañana, antes de abrir, vuelve a lanzar el instalador con
+ellos en la lista.
+
+```
+sh sala/mac/instalar.sh --pantallas tele1,tele2,monitor1,monitor2,proyector1,proyector2,musico1,musico2,musico3,musico4,musico5,musico6,musico7,musico8,musico9,musico10
+```
+
+Y el 30, otra vez con las seis.
+
+```
+sh sala/mac/instalar.sh --pantallas tele1,tele2,monitor1,monitor2,proyector1,proyector2
+```
+
+La clave del panel, si la tiene, se queda como estaba. Sin los `musico` en la
+lista, el panel se llena de avisos ese día, porque los toma por erratas. Sale
+uno cuando cada móvil abre su página y otro cuando el Max le manda el primer
+vídeo, una vez por nombre. Si ya han salido, «borrar avisos» los quita.
+
+El instalador reinicia el servidor. Las pantallas reconectan solas y siguen
+con su vídeo por donde iba, porque lo que pone cada una se guarda en
+`estado/pantallas.json`, pero durante unos segundos no hay servidor. Así que
+mejor antes de abrir, y nunca a mitad de un pase.
 
 ## Antes de dejarlo solo
 
@@ -133,8 +162,9 @@ arrancan ni el servidor ni el Max.
 
 `comprobar.sh` y `estado.sh` miran el servidor desde el propio Mac, y eso no
 demuestra que lleguen los móviles. La prueba buena es coger un móvil conectado a
-la Wi-Fi de la sala, abrir `http://systema.internal/` y tocar una palabra. Lo de
-la red (nombre, IP reservada, móviles con datos) está en `sala/router/`.
+la Wi-Fi de la sala, escanear el QR del cartel (o abrir `http://192.168.0.10/`,
+con la IP de tu Mac) y tocar una palabra. Lo de la red (IP reservada, móviles
+con datos) está en `sala/router/`.
 
 Que el Max está mandando se ve en el panel (`http://localhost/panel`), en «lo
 que llega de max». `/health` solo dice en qué puerto escucha el servidor, no

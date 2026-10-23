@@ -208,12 +208,21 @@ const key = (f) => f.normalize('NFC').toLowerCase();
 // espacios y tildes, pero no «_», que es lo que separa las partes. Las filas
 // que ya hay no se tocan, porque manda lo que diga la hoja.
 const DE_NOMBRE = /^(\d+)_([^_]+)(?:_([^_]+))?(?:_([^_]+))?$/;
+// Con «Unique Suffix», TouchDesigner deja detrás «.mov.0» («particulas
+// prueba.mov.0.mov» llegó así el 22-10-2026), y la sección salía «T0.mov.0».
+// Se quita solo para leer las partes. El archivo sigue con su nombre de
+// verdad, que es el que busca el servidor.
+const SUFIJO_TD = /(?:\.(?:mov|mp4|m4v))*\.\d+$/i;
 function porNombre() {
   const enHoja = new Set(conceptos.filter((c) => c.archivo).map((c) => key(c.archivo.replace(/\.[^.]+$/, ''))));
   const usados = new Map();   // número de Max → quién lo tiene
+  const sinArchivo = new Set();   // números cuya fila no dice qué vídeo es
   for (const c of conceptos) {
     const n = Number(String(c.numero ?? '').replace(',', '.'));
-    if (c.numero && Number.isInteger(n)) usados.set(n, c.id || slug(c.etiqueta));
+    if (c.numero && Number.isInteger(n)) {
+      usados.set(n, c.id || slug(c.etiqueta));
+      if (c.archivo) sinArchivo.delete(n); else sinArchivo.add(n);
+    }
   }
   const tomados = new Set(conceptos.map((c) => c.id || slug(c.etiqueta)));
   // Cada vídeo una vez, esté en media/ o solo en sus versiones.
@@ -228,14 +237,29 @@ function porNombre() {
   const nuevas = [];
   const orden = [...vistos].sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true }));
   for (const [k, { base, archivo }] of orden) {
-    const m = enHoja.has(k) ? null : DE_NOMBRE.exec(base);
+    if (enHoja.has(k)) continue;
+    const limpio = base.replace(SUFIJO_TD, '');
+    const m = DE_NOMBRE.exec(limpio);
+    // Empieza por un número, así que iba para la hoja, pero tiene más partes
+    // de la cuenta. Antes se saltaba sin decir nada.
+    if (!m && /^\d+_/.test(limpio)) {
+      warnings.push(`${archivo} no lo añado a la hoja, porque no lo leo como número_Etiqueta_Sección_Proceso. `
+        + 'La etiqueta no puede llevar «_», que es lo que separa las partes. Usa espacios, como en 213_Gran Bosque_T2_G');
+    }
     if (!m) continue;
     const n = Number(m[1]);
     const etiqueta = m[2].trim();
     if (!etiqueta || n < 1) continue;
     if (usados.has(n)) {
-      warnings.push(`${archivo} no lo añado a la hoja, porque el ${n} ya lo tiene «${usados.get(n)}»`);
+      const falta = sinArchivo.has(n) ? `, pero esa fila no tiene archivo. Si es este vídeo, escribe ${archivo} en su columna archivo` : '';
+      warnings.push(`${archivo} no lo añado a la hoja, porque el ${n} ya lo tiene «${usados.get(n)}»${falta}`);
       continue;
+    }
+    // Con las cuatro partes y una sección que no es T0, T1…, lo normal es que
+    // la etiqueta lleve un «_» y todo se haya corrido un sitio.
+    if (m[4] !== undefined && !/^T\d+$/i.test(m[3].trim())) {
+      warnings.push(`${archivo} lo añado con la sección «${m[3].trim()}», que no es como T0 o T1. `
+        + 'Si la etiqueta lleva «_», cámbialo por un espacio (213_Gran Bosque_T2_G)');
     }
     let id = slug(etiqueta) || `concepto_${n}`;
     if (tomados.has(id)) id = `${id}_${n}`;
@@ -506,8 +530,16 @@ for (const c of ids.values()) {
   c.archivo = c.archivo.normalize('NFC');
   const base = c.archivo.replace(/\.[^.]+$/, '');
   const inVersion = ['movil', 'tablet', 'monitor'].map((v) => [v, versions[v].get(key(`${base}.mp4`))]).find(([, f]) => f);
-  const plain = onDisk.get(key(c.archivo));
+  // En media/ el servidor solo pone .mp4, por su nombre o con .mp4 en vez de
+  // su extensión. Un .mov suelto ahí contaba aquí como vídeo y en la sala no
+  // salía.
+  const suelto = onDisk.get(key(c.archivo));
+  const plain = [suelto, onDisk.get(key(`${base}.mp4`))].find((f) => f && /\.mp4$/i.test(f));
   const [folder, name] = inVersion ?? (plain ? [null, plain] : [null, null]);
+  if (!name && suelto) {
+    warnings.push(`«${c.id}» lleva ${suelto}, que está en media/, pero el servidor solo pone .mp4. Mételo en masters/ y pasa npm run versiones`);
+    continue;
+  }
   if (!name) {
     warnings.push(`«${c.id}» lleva ${c.archivo} y no está en media/ (ni sus versiones). Si lo copias luego, el servidor lo encuentra solo`);
     continue;

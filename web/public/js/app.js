@@ -279,7 +279,7 @@ function queueDeclutter() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Pan y zoom táctil (d3-zoom trae pinch, doble toque e inercia)
+// 3. Pan y zoom táctil (d3-zoom trae el arrastre y el pinch, y el doble toque lo quito)
 // ---------------------------------------------------------------------------
 // Escala a la que el mapa entero cabe en pantalla. El zoom de entrada y los
 // límites se definen relativos a ella, así funcionan igual en un móvil
@@ -314,6 +314,19 @@ const zoomBehavior = zoom()
   });
 let hintTimer = null;
 svg.call(zoomBehavior).on('dblclick.zoom', null);
+// Mientras se mueve el mapa, la señal de las líneas se para y vuelve a correr
+// al soltar. Repintaba el mapa entero en cada fotograma y, con algo sonando en
+// la sala, arrastrar costaba el triple en un móvil lento (medido en Chrome
+// con la CPU seis veces más lenta, 3,4 s de trabajo frente a 1,2 s). En los
+// vuelos, start y end saltan en cada fotograma, y la espera de 250 ms deja la
+// clase puesta durante todo el vuelo.
+let quieto = null;
+zoomBehavior
+  .on('start.senal', () => { clearTimeout(quieto); document.body.classList.add('moviendo'); })
+  .on('end.senal', () => {
+    clearTimeout(quieto);
+    quieto = setTimeout(() => document.body.classList.remove('moviendo'), 250);
+  });
 
 function fitTransform() {
   const { width, height } = stage.getBoundingClientRect();
@@ -777,6 +790,13 @@ video.addEventListener('playing', () => loading(false));
 // llamada) no es un atasco. Antes, a los 15 s se cerraba con «no se puede ver»
 // y el panel apuntaba un fallo que no era (lo arreglé el 2-oct-2026).
 video.addEventListener('pause', () => { clearTimeout(stallTimer); loading(false); });
+// Tras esa pausa, un toque en el vídeo lo reanuda, sin poner nada a la vista.
+// Antes se quedaba congelado, y la única salida era volver al mapa y abrirlo
+// de nuevo, que en una palabra con varios vídeos ponía otro.
+player.addEventListener('click', (ev) => {
+  if (ev.target.closest('button')) return;
+  if (playingId && !video.hidden && video.paused && !video.ended && video.getAttribute('src')) video.play().catch(() => {});
+});
 video.addEventListener('play', () => { if (playingId) armStall(playingId); });
 video.addEventListener('ended', close);
 video.addEventListener('error', () => {

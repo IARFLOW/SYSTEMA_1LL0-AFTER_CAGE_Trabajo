@@ -111,9 +111,11 @@ function fraccion(s) {
   return { n, d, v: n / d };
 }
 
+// Lo que dice ffprobe cuando no puede se guarda en el error (e.stderr) y no
+// sale crudo por la terminal.
 function sondear(ruta) {
   const salida = execFileSync('ffprobe', ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', ruta],
-    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   const info = JSON.parse(salida);
   const streams = info.streams ?? [];
   // Una carátula de disco dentro de un mp3 o un m4a sale como «vídeo», y no lo es.
@@ -406,7 +408,10 @@ async function main() {
   try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); } catch { fallar('hace falta ffmpeg (brew install ffmpeg)'); }
   if (!existsSync(o.masters)) fallar(`no encuentro la carpeta de masters ${o.masters}`);
 
-  const nombres = readdirSync(o.masters).filter((f) => !f.startsWith('.') && statSync(join(o.masters, f)).isFile()).sort();
+  const entradas = readdirSync(o.masters).filter((f) => !f.startsWith('.'));
+  const nombres = entradas.filter((f) => statSync(join(o.masters, f)).isFile()).sort();
+  // Las subcarpetas no se miran, pero se dice, que si no parecía que faltaban masters.
+  const carpetas = entradas.filter((f) => statSync(join(o.masters, f)).isDirectory()).sort();
   const masters = [];
   const raros = [];
   const porBase = new Map();
@@ -418,10 +423,19 @@ async function main() {
     porBase.set(base, f);
     masters.push({ fichero: f, base, ruta: join(o.masters, f) });
   }
+  for (const c of carpetas) console.log(`  · la carpeta ${c} no la miro, pon los masters sueltos en ${basename(o.masters)}/`);
   if (!masters.length) fallar(`no hay masters en ${o.masters}`);
   for (const f of raros) console.log(`  · ${f} no es ni vídeo ni audio, lo salto`);
   for (const m of masters) {
     if (/[#?%]/.test(m.base)) console.log(`  · ${m.fichero} lleva # ? o % en el nombre, y esos signos dan guerra en una dirección web. Mejor quitarlos`);
+    // Con «Unique Suffix», el Movie File Out de TouchDesigner deja el nombre
+    // como «200_Bosque_T0.mov.0.mov» (llegó así el 22-10-2026). npm run layout
+    // lo lee bien, pero el vídeo se queda con ese nombre en media/.
+    const sufijo = /(?:\.(?:mov|mp4|m4v))*\.\d+$/i.exec(m.base);
+    if (sufijo) {
+      console.log(`  · ${m.fichero} lleva «${sufijo[0]}» detrás del nombre, que lo pone TouchDesigner. `
+        + `Mejor renombrarlo a ${m.base.slice(0, sufijo.index)}${extname(m.fichero)} antes de pasarlo`);
+    }
   }
 
   const manifiestoRuta = join(o.media, 'versiones.json');
@@ -442,7 +456,13 @@ async function main() {
       const huella = `${PERFIL}:${st.size}:${Math.round(st.mtimeMs)}:${o.normalizar ? 'n' : '-'}`;
       estudiados.push({ ...m, ...info, huella, avisos: avisosDe(info) });
     } catch (e) {
-      estudiados.push({ ...m, roto: `ffprobe no lo puede leer (${e.message.split('\n')[0]})` });
+      // Un master a medio copiar (o una exportación cortada) no tiene el
+      // índice, que en un .mov va al final.
+      const dice = String(e.stderr ?? '').trim();
+      const roto = /moov atom not found|Invalid data/i.test(dice)
+        ? 'no se puede leer, le falta el final. Igual está a medio copiar o la exportación se cortó. Vuelve a copiarlo'
+        : `ffprobe no lo puede leer (${(dice || e.message).split('\n')[0]})`;
+      estudiados.push({ ...m, roto });
     }
   }
 
@@ -474,8 +494,10 @@ async function main() {
     if (o.normalizar) m.loud = await medirLoudnorm(m.ruta);
   }), o.paralelo * 2);
 
-  console.log(`hay ${estudiados.length} masters en ${relative(process.cwd(), o.masters) || '.'} y `
-    + `${tareas.length ? `${tareas.length} versiones por hacer` : 'todo está hecho'} (${o.paralelo} a la vez)`);
+  const rotos = estudiados.filter((m) => m.roto).length;
+  const cuantosRotos = rotos === 1 ? 'uno no se puede leer' : `${rotos} no se pueden leer`;
+  console.log(`hay ${estudiados.length} masters en ${relative(process.cwd(), o.masters) || '.'}${rotos ? ` (${cuantosRotos})` : ''} y `
+    + `${tareas.length ? `${tareas.length} versiones por hacer` : (rotos ? 'lo demás está hecho' : 'todo está hecho')} (${o.paralelo} a la vez)`);
 
   const errores = [];
   let hechas = 0;
@@ -511,9 +533,19 @@ async function main() {
     }
   }), o.paralelo);
 
-  // Lo que ya no tiene master se quita del manifiesto (los vídeos se quedan,
-  // que borrar lo decide quien sabe si sigue haciendo falta).
-  for (const f of Object.keys(manifiesto.masters)) if (!nombres.includes(f)) delete manifiesto.masters[f];
+  // Lo que ya no tiene master en esta carpeta se quita del manifiesto solo si
+  // tampoco le queda ningún vídeo en media/ (los vídeos se quedan, que borrar
+  // lo decide quien sabe si sigue haciendo falta). Los masters de Guille y los
+  // audios de Juanlu pueden pasarse desde carpetas distintas al mismo media/,
+  // y borrar la entrada de los otros les quitaba el «soloAudio», y con él el
+  // altavoz del móvil. Si un master de esta pasada da el mismo nombre de
+  // salida, el de antes sobra, porque sus vídeos son ya los del nuevo.
+  for (const [f, e] of Object.entries(manifiesto.masters)) {
+    if (nombres.includes(f)) continue;
+    const pisado = porBase.has(basename(f, extname(f)));
+    const quedan = Object.values(e?.salidas ?? {}).some((s) => typeof s?.fichero === 'string' && existsSync(join(o.media, s.fichero)));
+    if (pisado || !quedan) delete manifiesto.masters[f];
+  }
   writeFileSync(manifiestoRuta, `${JSON.stringify(manifiesto, null, 2)}\n`);
 
   // ---------- Informe ----------
@@ -540,6 +572,10 @@ async function main() {
   if (errores.length) {
     console.log(`\n${errores.length === 1 ? 'Ha fallado una versión' : `Han fallado ${errores.length} versiones`}.`);
     for (const e of errores) console.log(`  · ${e}`);
+    process.exitCode = 1;
+  }
+  if (rotos) {
+    console.log(`\n${rotos === 1 ? 'Hay un master que no se puede leer, el del ✗ de arriba' : `Hay ${rotos} masters que no se pueden leer, los del ✗ de arriba`}.`);
     process.exitCode = 1;
   }
 }

@@ -74,7 +74,9 @@
       display: grid;
       place-content: center;
       margin: 0;
-      font-size: clamp(48px, 22vmin, 320px);
+      /* Con 15vw también cabe en una pantalla de pie (un iPad, una tele
+         vertical), donde 22vmin cortaba justo el número del final. */
+      font-size: clamp(48px, min(22vmin, 15vw), 320px);
       font-weight: 700;
       letter-spacing: 0.02em;
       color: var(--fg);

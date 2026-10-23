@@ -288,6 +288,18 @@ function mediaUrl(folder, name, now) {
   return { url: `/media/${folder ? `${folder}/` : ''}${encodeURIComponent(name)}?v=${v}`, path, stamp };
 }
 
+// La duración se lee una vez por fichero y se guarda con su huella en
+// `vistos`. Un fichero cambiado entra como uno nuevo, sin la duración, y se
+// vuelve a leer. Antes se abría cada MP4 en cada repaso del catálogo, y con
+// 160 conceptos eso eran unos 30 ms parados delante de cada disparo del Max.
+function duracion(path) {
+  const v = vistos.get(path);
+  if (v && 'dur' in v) return v.dur;
+  const d = mp4Duration(path);
+  if (v) v.dur = d;
+  return d;
+}
+
 // Los vídeos que salieron de un master que solo era audio, según el registro
 // de npm run versiones (media/versiones.json). En el móvil del público llevan
 // el altavoz encima del negro. Las pantallas de la sala no lo miran. Sin
@@ -371,7 +383,7 @@ function refreshCatalog() {
         file = first.url;
         if (VERSIONES.some((v) => found[v])) files = Object.fromEntries(VERSIONES.filter((v) => found[v]).map((v) => [v, found[v].url]));
         // Solo si se sabe de verdad. Un 0 o un «no se sabe» no pisan la de la hoja.
-        const d = mp4Duration(first.path);
+        const d = duracion(first.path);
         if (d > 0) duration = d;
         for (const f of Object.values(found)) stamps.push(f.stamp);
       } else missing.push(`${id} (${archivo})`);
@@ -800,9 +812,10 @@ function panelMsg() {
     type: 'panel',
     version: VERSION, started: state.started.toISOString(), uptime: Math.round(process.uptime()),
     screens, expected: PANTALLAS, scene: state.scene, phones: state.phones.size,
-    active: activeIds().map((id) => cat.items.get(id)?.label ?? id),
-    mobile: mobileIds().map((id) => cat.items.get(id)?.label ?? id),
-    osc: state.osc, oscListening: state.oscListening, avisos: state.avisos,
+    // Una palabra con varios vídeos sale una vez, aunque suenen dos de ellos.
+    active: [...new Set(activeIds().map((id) => cat.items.get(id)?.label ?? id))],
+    mobile: [...new Set(mobileIds().map((id) => cat.items.get(id)?.label ?? id))],
+    osc: state.osc, oscListening: state.oscListening, avisos: state.avisos, now: Date.now(),
     catalog: { conceptos: cat.items.size, conVideo: [...cat.items.values()].filter((it) => it.file).length, missing: cat.missing },
   });
 }
@@ -1012,6 +1025,14 @@ function onMessage(ws, msg, ip, addr) {
     log(`desde el panel, ${msg.type === 'panel:identify' ? 'identificar' : 'recargar'} ${target ?? 'todas las pantallas'}`);
     return;
   }
+  // El panel borra los avisos. El servidor no se para por la noche, y por la
+  // mañana se mezclaban con los nuevos los de ayer.
+  if (ws.role === 'panel' && msg.type === 'panel:clear') {
+    state.avisos.length = 0;
+    log('desde el panel, avisos borrados');
+    roomChanged();
+    return;
+  }
   if (ws.role === 'phone' && (msg.type === 'phone:play' || msg.type === 'phone:stop')) {
     const before = lit();
     const { items } = refreshCatalog();
@@ -1151,7 +1172,7 @@ function flushOscRepeats() {
 
 function oscRecord(text, result, level = 'ok') {
   const t = new Date().toLocaleTimeString('es-ES', { hour12: false });
-  state.osc.unshift({ t, text, result, level });
+  state.osc.unshift({ t, ms: Date.now(), text, result, level });
   state.osc.length = Math.min(state.osc.length, OSC_KEEP);
   roomChanged();
 }
@@ -1198,6 +1219,17 @@ function onOscMessage(address, args, from) {
       return;
     }
     const item = items.get(id);
+    // En la sala, un concepto sin su vídeo en media/ (falta, tiene una errata
+    // o se está copiando) deja la pantalla en negro y no se enciende en el
+    // mapa, igual que en el móvil. Antes la palabra se ponía verde en todos
+    // los móviles sin que sonara nada. Con --dev sigue entrando, para probar
+    // sin los vídeos.
+    if (!item.file && !DEV) {
+      setScreen(screen, null);
+      logOsc(`OSC ${text}${who} → «${item.label}» no tiene su vídeo en media/, así que ${screen} se queda en negro`);
+      oscRecord(text, `«${item.label}» no tiene vídeo en media/ · ${screen} en negro`, 'warn');
+      return;
+    }
     setScreen(screen, id, item.duration);
     logOsc(`OSC ${text}${who} → ${screen} pone «${item.label}»`);
     oscRecord(text, `${screen} pone «${item.label}»`);

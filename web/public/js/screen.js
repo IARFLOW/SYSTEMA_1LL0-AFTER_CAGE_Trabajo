@@ -437,6 +437,12 @@ document.addEventListener('visibilitychange', () => {
   report();
   if (document.hidden) return;
   keepAwake();
+  // El reloj de este aparato puede haberse parado mientras dormía, y las
+  // respuestas de antes del bloqueo ya no valen. Se tiran y se pregunta otra
+  // vez seguido. Hasta que llega la primera, sigue con lo que sabía, y si iba
+  // mal, el compás salta en cuanto llega.
+  samples = [];
+  for (let i = 0; i < 3; i += 1) setTimeout(askTime, i * 150);
   // Al desbloquear el iPad, si lo que tocaba ya ha acabado, negro. Si no,
   // sigue por donde va la sala, no por donde se quedó.
   if (!current?.file) return;

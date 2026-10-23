@@ -131,7 +131,9 @@ case "$NOMBRE_ESTADO" in
     else
       ojo "${NOMBRE} lleva a ${NOMBRE_IPS}, y este Mac es ${IP}" "en el router, que el nombre apunte a la IP reservada de este Mac"
     fi ;;
-  no) ojo "${QUIEN} no conoce ${NOMBRE}" "falta darlo de alta en el router. Si el router no deja, los carteles van con la IP (abajo)" ;;
+  # Contesta y no lo conoce. Con un router que no da nombres, como el AX53 de
+  # la sala, es lo normal y no hay nada que arreglar.
+  no) mira "el router no da nombres, ${QUIEN} no conoce ${NOMBRE}" "es lo normal con el vuestro, y los carteles van con la IP (abajo)" ;;
   mudo)
     if [ -z "$DNS_DADO" ] && [ -n "$PUERTA" ] && [ "$PUERTA" != "$DNS" ]; then
       ojo "el DNS que reparte el router (${DNS}) no contesta" "no es el router (${PUERTA}). En su DHCP, que reparta como DNS su propia IP"
@@ -212,7 +214,8 @@ case "$ESTADO" in
         ojo "${APPLE} sale a internet (${PRIMERA}), así que este router tiene internet" "en la sala, sin cable de internet y con ese nombre apuntado a ${IP}"
       fi
     fi ;;
-  no) ojo "el router no manda ${APPLE} a este Mac" "los iPhone avisarán de que la red no tiene internet (la web va igual). Si el router deja, apúntalo a ${IP}" ;;
+  # Lo mismo, el router no da nombres y no se puede arreglar.
+  no) mira "los iPhone avisarán de que la red no tiene internet, y la web va igual" "el router no manda ${APPLE} a este Mac. Con un router que dé nombres, se apuntaría a ${IP}" ;;
   mudo) ojo "el DNS del router no contesta por ${APPLE}" "un iPhone esperaría su respuesta al unirse. Mira el DNS del router y que reparta el suyo" ;;
 esac
 
@@ -311,7 +314,7 @@ if [ -n "$NOMBRE_MIO" ]; then
   if [ "$PUERTO" = 80 ]; then echo "    npm run carteles -- --red <red> --clave <clave> --ip ${IP}"
   else echo "    npm run carteles -- --red <red> --clave <clave> --web http://${NOMBRE}${SUF}/ --ip ${IP}${SUF}"; fi
 else
-  echo "  mientras el nombre no funcione, los carteles van con la IP y se sacan así, en la carpeta web"
+  echo "  sin el nombre, los carteles van con la IP y se sacan así, en la carpeta web"
   echo "    npm run carteles -- --red <red> --clave <clave> --web http://${IP}${SUF}/"
 fi
 

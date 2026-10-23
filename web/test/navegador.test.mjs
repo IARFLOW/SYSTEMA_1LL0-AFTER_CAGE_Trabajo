@@ -140,6 +140,9 @@ test('una pausa del sistema no cierra el vídeo como atascado', { skip, timeout:
   assert.equal(await b.evaluate(`document.getElementById('player').hidden`), false, 'el reproductor sigue abierto');
   assert.ok(!(await b.evaluate(`document.getElementById('note').textContent`)).includes('«Con vídeo» no se puede ver'), 'ni el aviso de que no se puede ver');
   assert.ok(!out.some((l) => /no ha podido poner «Con vídeo» \(atascado\)/.test(l)), 'el servidor no apunta un fallo que no es');
+  // Y un toque en el vídeo parado lo reanuda. Antes no hacía nada.
+  await b.tap(195, 420);
+  await b.until(`!document.getElementById('video').paused`, 4000);
   await b.evaluate(`document.getElementById('back').click()`);
   await b.until(`document.getElementById('player').hidden`, 4000);
 });

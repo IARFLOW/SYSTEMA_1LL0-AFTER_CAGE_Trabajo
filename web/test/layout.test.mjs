@@ -267,3 +267,58 @@ test('un MP4 con tilde guardado como lo guarda el Finder casa con la hoja', { sk
   assert.doesNotMatch(r.stdout, /no está/);
   assert.ok(leer(raiz, 'contents.json').cancion.file, 'lo encuentra');
 });
+
+// TouchDesigner, con «Unique Suffix», deja «.mov.0» detrás del nombre
+// (22-10-2026). La sección salía «T0.mov.0», y el archivo tiene que seguir
+// siendo el de verdad, que es el que busca el servidor.
+test('el «.mov.0» que pone TouchDesigner no se cuela en la sección, y el archivo queda con su nombre', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,archivo,numero\n',
+    media: { 'movil/200_Bosque_T0.mov.0.mp4': 'x', 'movil/201_Gota_T1_G.0.mp4': 'x' },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  const texto = readFileSync(join(raiz, 'data', 'conceptos.csv'), 'utf8');
+  assert.equal(texto, 'id,etiqueta,archivo,numero,seccion,proceso\n'
+    + 'bosque,Bosque,200_Bosque_T0.mov.0.mp4,200,T0,\ngota,Gota,201_Gota_T1_G.0.mp4,201,T1,G\n');
+  assert.equal(leer(raiz, 'contents.json').bosque.archivo, '200_Bosque_T0.mov.0.mp4');
+});
+
+// Lo que antes pasaba en silencio con los nombres de los vídeos.
+test('un nombre que empieza por número y no se puede leer se avisa, y también una sección rara', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,archivo,numero\nlluvia,Lluvia,,300\npiedra,Piedra,piedra.mp4,101\n',
+    media: {
+      '213_Gran_Bosque_T2_G.mp4': 'x',
+      '214_Gran_Bosque_T2.mp4': 'x',
+      '300_Lluvia_T0_A.mp4': 'x',
+      '101_Otra_T0_G.mp4': 'x',
+    },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /213_Gran_Bosque_T2_G\.mp4 no lo añado a la hoja, porque no lo leo como número_Etiqueta_Sección_Proceso\. La etiqueta no puede llevar «_»/);
+  assert.match(r.stdout, /214_Gran_Bosque_T2\.mp4 lo añado con la sección «Bosque», que no es como T0 o T1/);
+  assert.match(r.stdout, /300_Lluvia_T0_A\.mp4 no lo añado a la hoja, porque el 300 ya lo tiene «lluvia», pero esa fila no tiene archivo\. Si es este vídeo, escribe 300_Lluvia_T0_A\.mp4 en su columna archivo/);
+  assert.match(r.stdout, /101_Otra_T0_G\.mp4 no lo añado a la hoja, porque el 101 ya lo tiene «piedra»/);
+  assert.doesNotMatch(r.stdout, /101_Otra_T0_G\.mp4[^\n]*no tiene archivo/, 'la fila del 101 sí tiene archivo');
+  const texto = readFileSync(join(raiz, 'data', 'conceptos.csv'), 'utf8');
+  assert.match(texto, /\ngran,Gran,214_Gran_Bosque_T2\.mp4,214,Bosque,T2\n$/, 'la sección rara se escribe igual que antes');
+  assert.doesNotMatch(texto, /213_/);
+});
+
+// El servidor solo pone .mp4 de media/. Un .mov suelto contaba aquí como
+// vídeo y en la sala no salía.
+test('un .mov suelto en media/ no cuenta como vídeo, y se dice qué hacer', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,archivo\nsilencio,Silencio,Silencio.mov\nruido,Ruido,Ruido.mov\n',
+    media: { 'Silencio.mov': 'x', 'Ruido.mov': 'x', 'Ruido.mp4': 'x' },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /«silencio» lleva Silencio\.mov, que está en media\/, pero el servidor solo pone \.mp4\. Mételo en masters\/ y pasa npm run versiones/);
+  const c = leer(raiz, 'contents.json');
+  assert.equal(c.silencio.file, null);
+  assert.match(c.ruido.file, /^\/media\/Ruido\.mp4\?v=/, 'con el .mp4 al lado, el servidor pone ese');
+  assert.match(r.stdout, /1 con vídeo/);
+});

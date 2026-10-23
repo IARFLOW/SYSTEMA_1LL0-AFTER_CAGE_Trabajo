@@ -55,7 +55,7 @@ npm run dev          # servidor + simulador de sala en http://localhost:8080
 - `http://localhost:8080/screen/tele1` → la página de la pantalla `tele1`. Hay una por pantalla, con el nombre que use el Max.
 - `http://localhost:8080/health` → estado en texto plano.
 - `npm run max` → un Max de prueba que manda la escena de ejemplo del patch de Juanlu.
-- `npm test` → 120 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
+- `npm test` → 127 pruebas del Max, las pantallas, los móviles, el panel, los carteles, el layout, las versiones y los arrancadores de pantallas, contra un servidor de verdad en puertos libres. Las de navegador usan Chrome sin ventana, las de vídeo ffmpeg y las del arrancador de Windows PowerShell 7 (`pwsh`), y si no están, se saltan solas.
 
 `npm start` arranca como en la sala, sin simulador. Ahí `/dev` y su API no
 existen, porque cualquiera en la Wi-Fi de la sala podría encender conceptos a
@@ -69,6 +69,15 @@ El 22-10-2026 el altavoz no salía por eso, porque la página ya lo traía y el
 servidor de antes no le decía qué vídeos son audios. Con `npm start` o
 `npm run dev`, se para con Ctrl+C y se lanza otra vez. Con el servicio de
 `sala/mac/instalar.sh`, `launchctl kickstart -k gui/$(id -u)/es.systema.servidor`.
+
+Después hay que recargar las pantallas que estén abiertas, para que cojan la
+página nueva. Se hace desde el panel con «recargar todas», al lado de
+«identificar todas». Pide confirmación, porque los iPads y las tablets se
+quedan sin el toque y hay que volver a tocarlos uno a uno. Y si ha cambiado
+algo de `sala/pantallas/`, en cada ordenador con pantallas por cable se vuelve
+a lanzar `mac.sh` o `windows.cmd` con `--instalar` y los mismos nombres (y el
+mismo `--servidor`). Lo que queda instalado es una copia del script, y sin eso
+seguiría la de antes.
 
 Tocar un concepto en un móvil pone el vídeo solo en ese móvil, como pide
 vuestro documento («la reproducción del público es individual»). Lo que ven
@@ -174,8 +183,20 @@ audio sale como MP4 con la imagen en negro. Lo vertical sale derecho, y se
 quitan los metadatos (en un vídeo de móvil va dónde se grabó). El volumen no se
 toca, y el informe dice el de cada master por si alguno se exportó muy bajo o
 muy alto. Hace falta ffmpeg, y si se lanza otra vez solo rehace lo que ha
-cambiado. Cada aparato coge su versión solo, y si no la hay, la del vídeo tal
-cual.
+cambiado.
+
+Cada aparato coge su versión solo. El móvil del público coge la `movil`, y si
+no la hay, el vídeo tal cual de `media/`, y si tampoco, la `tablet` o la
+`monitor`. Una pantalla coge la suya (`tablet` en lo táctil, `monitor` en lo
+demás), y si no la hay, lo mismo que un móvil, o sea primero la `movil`, luego
+el vídeo tal cual y luego la que quede.
+
+- `npm run versiones` apunta en `media/versiones.json` lo que ha hecho con cada master. Si pasáis masters desde otra carpeta (`npm run versiones -- --masters <carpeta>`), los de la otra no se borran del registro mientras sus MP4 sigan en `media/`. Así los audios de Juanlu no pierden el altavoz si Guille pasa los suyos desde otro sitio.
+- Si se copia la carpeta `media/` de otro ordenador, se copia antes de pasar vuestros masters, no después. Copiar un `versiones.json` encima borra las huellas de lo que ya estaba hecho, y la siguiente pasada vuelve a codificarlo todo.
+- Si un master está a medio copiar, `npm run versiones` lo dice y os pide que lo volváis a copiar.
+- Si TouchDesigner añade «.mov.0» o «.0» al nombre (pasa con «Unique Suffix» encendido en Movie File Out), `npm run layout` lo quita para leer la palabra y `npm run versiones` lo avisa. Pero mejor apagar ese ajuste.
+- Un nombre con `_` dentro de la etiqueta ya no se salta en silencio. `npm run layout` lo avisa.
+- El servidor solo pone los `.mp4`. Un `.mov` suelto en `media/` no lo pone, y `npm run layout` ahora lo avisa. Los `.mov` van a `masters/` y salen como MP4 con `npm run versiones`.
 
 El negro de un audio lleva encima un altavoz en el móvil del público, para que
 se sepa que está sonando algo. Las pantallas de la sala no lo ponen nunca, ni
@@ -210,6 +231,7 @@ por UDP a un solo puerto, el 9100, y cada mensaje dice a qué pantalla va.
 - Cada mensaje es un disparo, así que el mismo número otra vez vuelve a empezar el vídeo.
 - Si el Max no manda el 0, el verde se apaga solo cuando acaba el vídeo. Al acabar, la pantalla se queda en negro y no repite.
 - Un número que no está en la hoja deja la pantalla en negro y lo apunta en el registro. Una dirección que no entiende, como una errata en el patch, la apunta una sola vez.
+- Un número que sí está en la hoja pero cuyo vídeo no está en `media/`, en la sala (sin `--dev`) deja la pantalla en negro, la palabra no se enciende en verde y sale un aviso en «lo que llega de max», en el panel.
 - Con la lista de pantallas de la sala (`PANTALLAS=tele1,tele2,monitor1,monitor2,proyector1,proyector2`, que pone el instalador del Mac), si el Max manda a un nombre que no está en ella, el panel lo avisa, porque suele ser una errata (`/tel3/video`) y esa tele se quedaría en negro.
 - Por defecto solo acepta mensajes de este mismo ordenador (`127.0.0.1`), porque en la sala el Max y el servidor van juntos en tu M4. Si el Max va en otro ordenador, se arranca con `OSC_HOST=0.0.0.0 npm start`, y para otro puerto está `OSC_PORT`.
 - Si el 9100 ya lo tiene otro programa, el servidor lo dice al arrancar, en el panel y en `/health` (`osc SIN PUERTO`), en vez de repartirse con él los mensajes sin avisar. Lo vuelve a intentar cada 10 s, y en cuanto el otro lo suelta lo coge sin reiniciar nada.
@@ -223,8 +245,9 @@ que no salta si cambia la hora del Mac.
 
 ### Cada pantalla abre su página
 
-Cada aparato abre en su navegador `http://systema.internal/screen/tele1` en la
-sala (o la IP del Mac), con el mismo nombre que usa el Max. Pone lo que le
+Cada aparato abre en su navegador `http://<IP del Mac>/screen/tele1`, con la IP
+reservada del M4 (`http://192.168.0.10/screen/tele1`, por ejemplo) y el mismo
+nombre que usa el Max. Pone lo que le
 llega a pantalla completa y sin cursor, y se queda en negro cuando no pone
 nada. Si se abre o se reconecta a mitad de un vídeo, entra por donde va. Las
 que ponen el mismo vídeo van clavadas. Cada una mide su reloj contra el del
@@ -238,8 +261,12 @@ corta la Wi-Fi, lo que está poniendo sigue, avisa abajo a la izquierda y
 reconecta sola. Se recupera sola de un vídeo atascado o de un error de red,
 también si la red falla justo cuando el Max dispara (reintenta mientras dure el
 vídeo). No enseña rutas técnicas al público (se las cuenta al servidor) y coge
-su versión del vídeo, `tablet` en lo táctil y `monitor` en lo demás
-(`?version=movil` lo cambia a mano).
+su versión del vídeo, `tablet` en lo táctil y `monitor` en lo demás.
+`?version=movil` lo cambia a mano. En la tablet de Guille (Samsung SM-P550,
+1024 × 768) conviene abrirla así, `http://<IP>/screen/<nombre>?version=movil`,
+porque en esa pantalla la de móvil se ve igual y pide menos de la mitad de
+Wi-Fi (unos 2,2 Mbps frente a 5). Guille, compruébalo con 15 min de vídeo, que
+en la tablet no está medido.
 
 - En un iPad, una tablet o un móvil hay que tocar la pantalla una vez al encenderla (el «toque diario»), porque sin un toque ningún navegador deja sonar un vídeo. Hasta entonces pone los vídeos sin sonido y lo pide abajo a la izquierda, y el panel dice «sin activar». El mismo toque la pone a pantalla completa. Una recarga lo olvida, también la que se manda desde el panel, y después hay que volver a tocarla. En el iPad, sin HTTPS una web no puede impedir que la pantalla se apague, así que el Bloqueo automático va en «Nunca» en Ajustes > Pantalla y brillo y también en los ajustes de Acceso guiado, que tiene el suyo (Apple, soporte 111795). Con Acceso guiado nadie se sale de Safari. Se empieza con un triple clic en el botón de inicio, y para salir hace falta su código. El modo de bajo consumo tiene que ir apagado, porque con él el iPad se bloquea a los 30 s.
 - Las Raspberry van con Chromium en modo quiosco, que suena sin toque. Cómo se prepara cada una está en `sala/raspberry/`.
@@ -252,9 +279,15 @@ enseña.
 
 - Cada pantalla con lo que pone, cuánto le queda y cómo está cada página abierta (si suena o le falta el toque, si está oculta, si ha fallado algo, su versión y su tamaño).
 - Con la lista `PANTALLAS`, las que faltan aunque no se hayan encendido nunca, y cuántas de la lista están conectadas.
-- «identificar», que saca el nombre en grande en esa pantalla (para saber cuál es cuál), y «recargar».
-- Los avisos, o sea vídeos que un móvil o una pantalla no han podido poner y nombres que no están en la lista.
-- Los móviles conectados y lo que se está viendo, los vídeos que faltan en `media/` y lo último que ha llegado del Max, con lo que hizo el servidor con cada mensaje.
+- «identificar», que saca el nombre en grande en esa pantalla (para saber cuál es cuál), y «recargar». Para todas a la vez, «identificar todas» y «recargar todas». La segunda pide confirmación, porque los iPads y las tablets se quedan sin el toque y hay que volver a tocarlos.
+- Los avisos, o sea vídeos que un móvil o una pantalla no han podido poner y nombres que no están en la lista. Los de otro día salen con su fecha, y «borrar avisos» los quita todos, para empezar el día con la lista limpia.
+- Los móviles conectados y lo que se está viendo, los vídeos que faltan en `media/` y lo último que ha llegado del Max, con lo que hizo el servidor con cada mensaje. En «lo que llega de max» pone «último mensaje hace N min», o «todavía nada» si no ha llegado nada desde que arrancó el servidor.
+
+La cabecera se queda arriba al bajar por la hoja, con el aviso de «sin
+conexión» dentro, y sin conexión los relojes se paran en lo último que se
+sabía, para no enseñar como vivo lo que no lo está. Se puede mirar desde un
+móvil sin que se descuadre. Los dos botones nuevos, las fechas, el «hace
+N min», la cabecera fija y lo del móvil son del 23-10-2026.
 
 Solo se abre desde el propio Mac. Para mirarlo desde un móvil de la red, el
 servidor tiene que arrancar con `PANEL_CLAVE` (el instalador lo pone con
@@ -282,18 +315,25 @@ veces se repitió.
 
 ## La red de la sala
 
-La sala va por HTTP con `systema.internal`. Lo decidí el 01-10-2026, y es
-el plan B que tenía pensado cuando estudié cómo montarlo. `.internal` es un
-nombre que ICANN reservó para redes privadas y no está en la lista de sufijos
-públicos, así que Chrome 154 no avisa ni con él ni con la IP (lo comprobé en su
-código el 01-10-2026). No hace falta comprar un dominio ni renovar un
-certificado cada 90 días con internet. Se pierde poco. Sin HTTPS no hay Wake
-Lock, así que el móvil del visitante se puede apagar mientras mira el mapa (no
-durante el vídeo), y el iPad depende de su Bloqueo automático en «Nunca».
+La sala va por HTTP y con la IP del M4. Lo de HTTP lo decidí el 01-10-2026, y
+es el plan B que tenía pensado cuando estudié cómo montarlo. No hace falta
+comprar un dominio ni renovar un certificado cada 90 días con internet, y
+Chrome 154 no avisa con la IP (lo comprobé en su código el
+01-10-2026). Se pierde poco. Sin HTTPS no hay Wake Lock, así que el móvil del
+visitante se puede apagar mientras mira el mapa (no durante el vídeo), y el
+iPad depende de su Bloqueo automático en «Nunca».
 
-- En la sala el servidor va en el puerto 80, para que la dirección no lleve número y quede en `http://systema.internal/`. El router tiene que mandar ese nombre a la IP del Mac. Si el router no deja dar nombres, el QR del mapa va directo a la IP y funciona igual. Qué tiene que permitir el router y cómo se comprueba está en `sala/router/`.
+Vuestro router, el TP-Link Archer AX53, no da nombres locales, así que todo va
+con la IP reservada del M4 (`http://192.168.0.10/`, por ejemplo), y los QR y
+los carteles ya salen con ella. `systema.internal` solo valdría con un router
+que dé nombres. Es un nombre que ICANN reservó para redes privadas y que
+tampoco hace avisar a Chrome.
+
+- En la sala el servidor va en el puerto 80, para que la dirección no lleve número y quede en `http://<IP del Mac>/`. La IP tiene que estar reservada en el router, porque si el Mac cambia de IP los QR dejan de valer. Qué tiene que permitir el router, con los menús del AX53, y cómo se comprueba está en `sala/router/`.
 - El riesgo más alto que he encontrado está en Android. Con los datos móviles encendidos, la Wi-Fi sin internet no pasa a ser la red del móvil hasta que se acepta el aviso de «esta red no tiene internet», y mientras tanto el navegador sale por los datos y la web no abre (lo miré en el código de Android). Por eso el primer cartel dice que se acepte el aviso y el segundo, que se apaguen los datos si no abre. Hay que probarlo con un Android de verdad en la red de la sala.
-- Al unirse a una Wi-Fi, los móviles hacen sus comprobaciones de conectividad. El iPhone pide `captive.apple.com/hotspot-detect.html` y Android `…/generate_204`. Sin internet nadie contesta, y el iPhone abre una ventanita de portal cautivo. El servidor contesta lo que esperan (también a Windows y Firefox), siempre que el DNS del router mande esos nombres al Mac y el servidor vaya en el 80. Con las de Apple el iPhone debería dar la red por buena, pero no lo he probado. Apple declara esa comprobación también por el 443, y qué hace el iPhone si el 80 contesta y el 443 no, no lo dice nadie. Las de Android no se pueden engañar del todo (su prueba por HTTPS a Google siempre falla sin internet), y falsearlas cambia qué aviso sale, no si sale.
+- Al unirse a una Wi-Fi, los móviles hacen sus comprobaciones de conectividad. El iPhone pide `captive.apple.com/hotspot-detect.html` y Android `…/generate_204`. El servidor contesta lo que esperan (también a Windows y Firefox), pero solo le llegan si el DNS del router manda esos nombres al Mac, y el AX53 no deja. Así que el iPhone avisará de que la red no tiene internet, y la web va igual. Qué hace exactamente con vuestro router hay que verlo en la prueba de `sala/router/`. Las de Android no se pueden engañar del todo (su prueba por HTTPS a Google siempre falla sin internet), y falsearlas cambiaría qué aviso sale, no si sale.
+- Safari 18.2 o más nuevo prueba primero `https` y, si falla, cae a `http`. Si el Mac rechaza el 443 al momento no se nota. Con el modo encubierto del cortafuegos activado tarda unos 3 s la primera vez (lo avisa el instalador).
+
 ### Los móviles de los músicos
 
 Para las vídeo-partituras del 29-10-2026, cada móvil es una pantalla más, de
@@ -314,20 +354,20 @@ su versión. En la hoja de 10 QR, el detector de macOS los lee todos, uno a uno
 
 - Para que el móvil no se apague, mientras espera en negro la página pone debajo un vídeo negro de 10 s en marcha (`public/despierta.mp4`, con una pista de silencio), solo en lo táctil. Chrome no deja apagarse la pantalla con un vídeo en marcha que la ocupe, aunque vaya sin sonido, y la partitura ya lo hace sola. Safari solo si el vídeo tiene sonido y suena, así que en iPhone el negro suena en silencio desde el toque, y sigue debajo si la partitura no tiene sonido. En un móvil de verdad está por probar, así que el bloqueo automático, lo más largo que deje cada móvil.
 - Si el vídeo suena, un toque al abrir la página. En iPhone hace falta igualmente, para que no se apague.
-- Si el Mac de la sala tiene puesta la lista de pantallas (`PANTALLAS`), los `musico` van también en ella, o el panel avisa de que no están.
-
-- Safari 18.2 o más nuevo prueba primero `https` y, si falla, cae a `http`. Si el Mac rechaza el 443 al momento no se nota. Con el modo encubierto del cortafuegos activado tarda unos 3 s la primera vez (lo avisa el instalador).
+- Si el Mac de la sala tiene puesta la lista de pantallas (`PANTALLAS`), los `musico` van también en ella, o el panel avisa de que no están. Cómo se ponen el 29 y se quitan el 30 está en `sala/mac/README.md`, «El 29, con los músicos».
 
 ### Los carteles
 
-`npm run carteles -- --red SYSTEMA --clave unaclave --ip 192.168.8.10` deja en
-`carteles/` los dos carteles del recorrido, en HTML y en PDF (si hay Chrome), y
-cada QR suelto en SVG. Fue idea de Juanlu en la reunión del 23-09-2026 que el
+`npm run carteles -- --red SYSTEMA --clave unaclave --web http://192.168.0.10/`,
+con la IP del Mac en la sala, deja en `carteles/` los dos carteles del
+recorrido, en HTML y en PDF (si hay Chrome), y cada QR suelto en SVG. Sin
+`--web`, el QR iría a `http://systema.internal/`, que con vuestro router no
+abre. Fue idea de Juanlu en la reunión del 23-09-2026 que el
 cartel sea parte del acceso a la obra, «aquí párate y haz esto».
 
 - El primero une el móvil a la Wi-Fi de un toque con la cámara (formato `WIFI:T:WPA;S:…;P:…;;`, el que leen las cámaras de iPhone y de Android 10 o más nuevo), con la red y la clave escritas, y avisa de que la red no tiene internet.
-- El segundo abre el mapa. Lleva el QR grande, la dirección escrita con `http://` delante (escrita sin él, Chrome prueba antes `https` o la toma por una búsqueda) y, con `--ip`, la IP del Mac en letra y en un QR pequeño, que no pasa por el DNS y abre aunque el nombre falle.
-- Si el router no deja nombres, con `--web http://192.168.8.10/` el QR grande va a la IP.
+- El segundo abre el mapa. Lleva el QR grande y la dirección escrita con `http://` delante (escrita sin él, Chrome prueba antes `https` o la toma por una búsqueda).
+- Con un router que sí dé nombres, el QR grande puede ir a `systema.internal` y `--ip 192.168.0.10` añade la IP del Mac en letra y en un QR pequeño, que no pasa por el DNS y abre aunque el nombre falle.
 - Lo que dicen está en `TEXTOS`, al principio de `scripts/carteles.mjs`, para cambiarlo sin tocar nada más. Los textos son provisionales, los decidís vosotros. El cartel tiene que estar iluminado, porque en una sala a oscuras la cámara no lee el QR.
 
 ## Probar sin Max
@@ -347,11 +387,35 @@ cada mensaje.
 un servidor de verdad. Abren la página, se conectan, pasean por el mapa, tocan
 una palabra y se bajan su vídeo al ritmo al que se ve, y unos cuantos se van y
 vuelven. A la vez, un Max de mentira manda vídeos a las pantallas. Por defecto
-son 25 móviles durante 2 minutos (`--moviles 50 --minutos 5` para más). Con
-`--servidor http://192.168.8.10` se lanza desde otro portátil contra el
-servidor de la sala, y así se carga también el router. Para eso el servidor
-tiene que arrancar sin los topes por IP (`MOVILES_POR_IP=0 CONEXIONES_POR_IP=0
-PANTALLAS_POR_IP=0`), porque todos los móviles de mentira salen de la misma IP.
+son 25 móviles durante 2 minutos (`--moviles 50 --minutos 5` para más).
+
+Con `--servidor http://192.168.0.10` se lanza desde otro portátil contra el
+servidor de la sala, y así se carga también el router. Desde otro portátil no
+mide el Max, porque el OSC solo entra desde el propio Mac de la sala, y lo
+quita solo. Y el servidor instalado tiene topes por IP (4 mapas, 6 pantallas y
+48 conexiones a la vez, `MOVILES_POR_IP`, `PANTALLAS_POR_IP` y
+`CONEXIONES_POR_IP` en `server/index.js`), que con todos los móviles de mentira
+saliendo de la misma IP cortarían la prueba. Así que antes se arranca a mano
+sin topes, en el Mac de la sala y desde la carpeta `web`.
+
+```
+launchctl bootout gui/$(id -u)/es.systema.servidor
+MOVILES_POR_IP=0 CONEXIONES_POR_IP=0 PANTALLAS_POR_IP=0 PORT=80 npm start
+```
+
+Lo primero para el servicio sin borrarlo (su fichero se queda en
+`~/Library/LaunchAgents/`), y lo segundo arranca el servidor en esa terminal.
+Al acabar la prueba, Ctrl+C, y se vuelve al servicio con su mismo fichero, con
+la lista de pantallas y la clave del panel de siempre.
+
+```
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/es.systema.servidor.plist
+```
+
+No uséis `desinstalar.sh` para esto, que borra ese fichero. Volver a lanzar
+`sh sala/mac/instalar.sh` sin nada detrás también vale, porque relee la lista
+y la clave del fichero que había. Mientras va a mano no lleva `caffeinate` ni
+se levanta solo si se cae, así que no lo dejéis así.
 
 Lo medí el 01-10-2026 en mi Mac con 100 móviles. Desde que el Max manda
 `/teleN/video` hasta que la palabra se enciende en cada móvil pasan 103 ms (110
@@ -422,7 +486,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 
 **El mapa**
 
-- Mapa 2D con pan, pinch-zoom e inercia (d3-zoom). Se orienta como un plano de papel, con dos dedos girando en el móvil, el gesto de rotación del trackpad en Safari y Mayúsculas + rueda en lo demás. Las palabras se quedan horizontales. «Centrar» devuelve encuadre y norte en un mismo vuelo, y la web entra con ese vuelo desde lejos.
+- Mapa 2D con arrastre y pinch-zoom (d3-zoom). Se orienta como un plano de papel, con dos dedos girando en el móvil, el gesto de rotación del trackpad en Safari y Mayúsculas + rueda en lo demás. Las palabras se quedan horizontales. «Centrar» devuelve encuadre y norte en un mismo vuelo, y la web entra con ese vuelo desde lejos.
 - Cada concepto es su palabra (28-09-2026, lo pedisteis el 23), en tres tamaños y dos grosores según su nivel. Se entra con la palabra más pequeña a 12 px como poco (en un móvil de 390 px medí 22, 15,5 y 12 px). Lo último tocado queda subrayado, como se subraya a máquina.
 - Ninguna palabra pisa a otra. Con los 50 conceptos de ejemplo y con un mapa de 100 conceptos y 168 relaciones salen 0 pisadas. Con el mapa girado, si dos caen una encima de otra, calla la que menos importa (primero lo que suena, luego lo que se ve en un móvil, lo tocado y cada nivel) y vuelve al enderezarlo.
 - Lo que suena en la sala se ve con la palabra en verde y la señal recorriendo sus líneas. Abajo, al alcance del pulgar, la línea «en sala» teclea y borra lo que suena (tocar uno vuela hasta su palabra).
@@ -460,7 +524,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 
 - Lo probé en móviles reales el 23-09-2026, con un MP4 de prueba, en un iPhone (Safari) y un Android (Chrome 153). Suena desde el primer toque, «← mapa» y el «atrás» de Android vuelven al mapa en el mismo sitio, girar el móvil conserva el mapa, quitar la Wi-Fi para el vídeo, avisa y reconecta, y bloquear el móvil o salir de Chrome lo para. Con los dos a la vez, lo que se enciende en uno se enciende en el otro al instante. Los gestos ya los había comprobado el 22-09-2026 en iPhone, Android y Windows.
 - Lo del Max y las pantallas, con las pruebas de `npm test` y en Chrome con la escena de ejemplo. Abrí una pantalla como si fuera un iPad (sin sonido hasta el toque), otra como una Raspberry (suena sin toque), el móvil y el panel, y congelé el servidor 27 s. En ese rato la pantalla avisa sin cortar lo que pone, y al volver sigue sin empezar de nuevo.
-- 114 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 20-10-2026, las de Windows con PowerShell 7 en el Mac).
+- 127 pruebas en `npm test`, las de navegador con Chrome sin ventana (todas bien el 23-10-2026, las de Windows con PowerShell 7 en el Mac).
 
 Hay capturas en `docs/` (`captura-mapa.jpg` en oscuro, `captura-mapa-claro.jpg`
 y `captura-video.jpg`). Son del 22-09-2026, todavía con puntos en vez de
@@ -468,9 +532,11 @@ palabras.
 
 ## Qué falta (en orden)
 
-1. Probarlo con los aparatos de verdad antes del montaje, o sea tu patch con tu Mac (`sala/mac/comprobar.sh` primero), los iPads (el de 6.ª generación llega a iPadOS 17 y el Air 2 se queda en el 15), una Raspberry Pi 4 con una prueba larga de 2-3 h con el vídeo de verdad, las teles y vuestro router. Y sobre todo un Android con los datos móviles encendidos en la red de la sala, que es el riesgo más alto. Todavía no he probado nada de esto en un iPad, una Raspberry ni un router.
-2. Lo que os toca a vosotros. Mandarme los CSV de conceptos y relaciones, los masters y la marca y el modelo de vuestro router, y decidir qué conceptos son de nivel 1 y 2, qué pasa al tocar una palabra sin vídeo, el texto de los carteles y si las pantallas por HDMI las pone el Max o una ventana de Chrome.
-3. Decidir qué pasa con tu Mac después de un reinicio. Con FileVault, o lo quitas durante la expo y pones el inicio de sesión automático, o quien abra la sala tiene la contraseña (está en `sala/mac/README.md`).
-4. El manual de la sala, con el montaje del 26 y el encendido de cada mañana, en una hoja.
-5. Ver con vosotros lo estético, que ahora mismo es si os gusta el vuelo de entrada (1,2 s desde lejos).
-6. Más adelante, si hace falta, un canal de vuelta hacia el Max (qué pantallas están vivas) y nombres con huella para el JS y el CSS si algún día se quiere caché larga también ahí (hoy revalidan con ETag, que en red local no cuesta ná).
+1. Probarlo en la sala con el AX53 ya montado, y lanzar allí `sh sala/router/comprobar-red.sh`. Lo que hace su DNS sin internet no está medido, así que apuntad qué dice del nombre.
+2. Un Android con los datos móviles encendidos en la red de la sala, que es el riesgo más alto (la prueba está en `sala/router/README.md`).
+3. El reinicio completo del M4, con el Max y FileVault. Decidir qué pasa después de un reinicio (o quitas FileVault durante la expo y pones el inicio de sesión automático, o quien abra la sala tiene la contraseña, está en `sala/mac/README.md`) y probarlo, a ver si el patch se abre solo y qué ventanas enseña el Max al arrancar.
+4. El reparto de las seis salidas entre los tres ordenadores y qué pantallas suenan. Como mucho una con sonido por ordenador (`sala/pantallas/README.md`).
+5. El arrancador en Windows de verdad, en el PC de Guille. Guille, lo primero `windows.cmd --ver` y mándame lo que sale.
+6. Repasar yo el manual de la sala, con el montaje del 26 y el encendido de cada mañana.
+7. Lo que decidís vosotros, que es qué conceptos son de nivel 1 y 2, qué pasa al tocar una palabra sin vídeo, el texto de los carteles y si os gusta el vuelo de entrada (1,2 s desde lejos).
+8. Más adelante, si hace falta, un canal de vuelta hacia el Max (qué pantallas están vivas) y nombres con huella para el JS y el CSS si algún día se quiere caché larga también ahí (hoy revalidan con ETag, que en red local no cuesta ná).

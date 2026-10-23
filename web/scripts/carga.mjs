@@ -8,8 +8,9 @@
 //                                                    Todos salen de una IP, así que ese servidor
 //                                                    va sin topes por IP (MOVILES_POR_IP=0
 //                                                    CONEXIONES_POR_IP=0 PANTALLAS_POR_IP=0)
-//   npm run carga -- --sin-max                     sin disparos de Max (si el servidor no es este
-//                                                    ordenador, Max no llega porque OSC solo entra desde 127.0.0.1)
+//   npm run carga -- --sin-max                     sin disparos de Max. Si el servidor no es este
+//                                                    ordenador, va sin Max solo, porque OSC solo entra
+//                                                    desde 127.0.0.1 y todos los disparos salían perdidos
 //
 // Cada móvil hace lo que hace una persona. Abre la página (index, CSS, JS,
 // letra, mapa), se conecta por WebSocket, pasea un rato por el mapa, toca una
@@ -37,8 +38,9 @@ import { encode } from 'node-osc';
 // ---------------------------------------------------------------------------
 // Opciones
 // ---------------------------------------------------------------------------
+const POR_DEFECTO = 'http://127.0.0.1:8080';
 function opciones(argv) {
-  const o = { servidor: 'http://127.0.0.1:8080', moviles: 25, minutos: 2, pantallas: 4, max: true, osc: 9100, cada: 6 };
+  const o = { servidor: POR_DEFECTO, moviles: 25, minutos: 2, pantallas: 4, max: true, osc: 9100, cada: 6 };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const toma = () => { if (argv[i + 1] === undefined) fallar(`falta el valor de ${a}`); i += 1; return argv[i]; };
@@ -61,6 +63,11 @@ function fallar(t) { console.error(`no puedo hacer la prueba de carga, ${t}`); p
 
 const o = opciones(process.argv.slice(2));
 const base = new URL(o.servidor);
+const local = ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(base.hostname);
+// El OSC del servidor solo escucha en 127.0.0.1, y el Max de mentira dispara a
+// 127.0.0.1. Desde otro portátil no le llega ni uno.
+const sinMaxPorRed = !local && o.max;
+if (sinMaxPorRed) o.max = false;
 const wsUrl = `${base.protocol === 'https:' ? 'wss' : 'ws'}://${base.host}/ws`;
 const fin = Date.now() + o.minutos * 60_000;
 const azar = (a, b) => a + Math.random() * (b - a);
@@ -71,7 +78,7 @@ const elige = (xs) => xs[Math.floor(Math.random() * xs.length)];
 // ---------------------------------------------------------------------------
 const m = {
   primeraCarga: [], salaMovil: [], salaPantalla: [], movilMovil: [], arranqueVideo: [],
-  bytes: 0, errores: [], desconexiones: 0, maxEnviados: 0, perdidos: 0, cpu: [], rss: [],
+  bytes: 0, errores: [], desconexiones: 0, topes: 0, maxEnviados: 0, perdidos: 0, cpu: [], rss: [],
 };
 const error = (t) => { if (m.errores.length < 200) m.errores.push(t); };
 function pct(xs, p) {
@@ -90,7 +97,11 @@ async function json(path) {
   return r.json();
 }
 let contents;
-try { contents = await json('/contents.json'); } catch (e) { fallar(`no llego al servidor ${o.servidor} (${e.message})`); }
+try { contents = await json('/contents.json'); } catch (e) {
+  // En la sala el servidor va en el 80, y sin --servidor se prueba el 8080.
+  const sala = o.servidor === POR_DEFECTO ? '. En el Mac de la sala va en el 80, prueba con --servidor http://127.0.0.1' : '';
+  fallar(`no llego al servidor ${o.servidor} (${e.message})${sala}`);
+}
 const ids = Object.keys(contents);
 const porNumero = new Map(Object.entries(contents).filter(([, c]) => Number.isInteger(c.num)).map(([id, c]) => [c.num, id]));
 const conVideo = ids.filter((id) => contents[id].file);
@@ -132,7 +143,15 @@ function conectar(rol, extra = {}) {
     ws.vivo = true;
     ws.on('open', () => { ws.send(JSON.stringify({ type: 'hello', role: rol, ...extra })); ok(ws); });
     ws.on('error', (e) => { if (ws.vivo) { error(`ws ${rol} · ${e.message}`); } mal(e); });
-    ws.on('close', () => { if (ws.vivo && Date.now() < fin) m.desconexiones += 1; ws.vivo = false; });
+    // Con los topes por IP, el servidor cierra la conexión más vieja de esa IP
+    // con 1008 «otra pestaña». No es que se caiga, es que la prueba no vale.
+    ws.on('close', (code, reason) => {
+      if (ws.vivo && Date.now() < fin) {
+        if (code === 1008 && String(reason) === 'otra pestaña') m.topes += 1;
+        else m.desconexiones += 1;
+      }
+      ws.vivo = false;
+    });
   });
 }
 
@@ -296,6 +315,7 @@ const pid = pidDelServidor();
 console.log(`pruebo con ${o.moviles} móviles y ${o.pantallas} pantallas contra ${o.servidor} durante ${o.minutos} min`
   + `${o.max ? `, con Max disparando cada ${o.cada} s al ${o.osc}` : ', sin Max'}`
   + `${conVideo.length ? `. Hay ${conVideo.length} conceptos con vídeo` : '. Ningún concepto tiene vídeo, así que solo pruebo el WebSocket'}`);
+if (sinMaxPorRed) console.log('  sin Max: el OSC solo entra desde el propio Mac de la sala. Para medir Max, lánzalo en ese Mac');
 const t0 = Date.now();
 const trabajos = [
   ...Array.from({ length: o.pantallas }, (_, i) => pantalla(`tele${i + 1}`)),
@@ -329,4 +349,10 @@ if (m.cpu.length) {
 }
 console.log(`  ha habido ${m.desconexiones} desconexiones inesperadas y ${m.errores.length} errores`);
 for (const e of [...new Set(m.errores)].slice(0, 10)) console.log(`    · ${e}`);
-process.exitCode = m.errores.length || m.desconexiones ? 1 : 0;
+// Los cierres por los topes no son fallos del servidor, pero la prueba sale
+// con error igual, porque lo medido no es lo de la sala.
+if (m.topes) {
+  console.log(`\nEl servidor ha cerrado ${m.topes === 1 ? 'una conexión' : `${m.topes} conexiones`} con «otra pestaña», `
+    + 'así que tiene los topes por IP. Arráncalo con MOVILES_POR_IP=0 CONEXIONES_POR_IP=0 PANTALLAS_POR_IP=0');
+}
+process.exitCode = m.errores.length || m.desconexiones || m.topes ? 1 : 0;

@@ -442,11 +442,14 @@ button {
    que dice la barra «en sala» se apaga, porque ya no es seguro. Bajo el
    vídeo, la señal también se para. Nadie la ve y el móvil la repintaba igual. */
 .offline .hint, .offline .note { opacity: 0; }
-.offline .link.lit, .viendo .link.lit, .viendo .tilde path { animation-play-state: paused; }
+.offline .link.lit, .viendo .link.lit, .viendo .tilde path, .moviendo .link.lit { animation-play-state: paused; }
 .offline .live-list { opacity: 0.45; }
 
 /* ---------- Reproductor ---------- */
 .player {
+  /* El reproductor es negro también en el tema claro, así que dentro lleva
+     el verde del oscuro. El del papel daba 3,85:1 sobre el negro. */
+  --accent: #58e07a;
   position: fixed;
   inset: 0;
   background: #000;

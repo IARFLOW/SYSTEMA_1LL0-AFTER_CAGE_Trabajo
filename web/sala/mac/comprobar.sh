@@ -129,6 +129,16 @@ else
   esac
 fi
 
+# ---------- Las pantallas por cable ----------
+# Nunca «ojo», que hay ordenadores sin pantallas por cable y este script sale
+# con error si hay alguno. El servicio es el de sala/pantallas/mac.sh --instalar.
+PANTALLAS_PLIST="$HOME/Library/LaunchAgents/es.systema.pantallas.plist"
+if [ -f "$PANTALLAS_PLIST" ] && launchctl print "gui/$(id -u)/es.systema.pantallas" >/dev/null 2>&1; then
+  ok "las pantallas de este Mac se abren solas"
+else
+  mira "las pantallas por cable de este Mac no se abrirán solas tras un reinicio" "si lleva alguna, en la carpeta web, sh sala/pantallas/mac.sh --instalar tele1 tele2, con sus nombres (y --servidor con la IP del M4 si este no es el M4). Lo cuenta sala/pantallas/README.md"
+fi
+
 # ---------- La red ----------
 IFAZ=$(route -n get default 2>/dev/null | awk '/interface:/ { print $2 }' || true)
 if [ -z "$IFAZ" ]; then mira "no tiene red" "conéctalo a la red de la sala (mejor por cable, con el adaptador)"
