@@ -34,6 +34,19 @@ const video = (info) => info.streams.find((s) => s.codec_type === 'video');
 const audio = (info) => info.streams.find((s) => s.codec_type === 'audio');
 const fps = (s) => { const [n, d] = s.avg_frame_rate.split('/').map(Number); return n / d; };
 
+// El color de un píxel del primer fotograma, para saber hacia dónde se ha girado.
+function color(f, x, y) {
+  const s = video(probe(f));
+  const rgb = execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+  const i = (y * s.width + x) * 3;
+  const [r, g, b] = rgb.subarray(i, i + 3);
+  if (r > 150 && g < 100 && b < 100) return 'rojo';
+  if (b > 150 && r < 100 && g < 100) return 'azul';
+  if (g > 90 && r < 60 && b < 60) return 'verde';
+  if (r < 40 && g < 40 && b < 40) return 'negro';
+  return `${r},${g},${b}`;
+}
+
 function moovPrimero(f) {
   const fd = openSync(f, 'r');
   try {
@@ -283,4 +296,97 @@ test('un master a medio copiar se explica y la pasada sale con error, y se dice 
   assert.match(r.stdout, /la carpeta T1 no la miro/);
   assert.match(r.stdout, /200_Bosque_T0\.mov\.0\.mov lleva «\.mov\.0» detrás.*renombrarlo a 200_Bosque_T0\.mov/);
   assert.ok(existsSync(join(salida, 'movil', '200_Bosque_T0.mov.0.mp4')), 'el bueno sale igual, y con su nombre de siempre');
+});
+
+// Las teles y los monitores de la sala van de pie y sus vídeos llevan la
+// imagen tumbada, y en los proyectores el vertical va en medio de un cuadro
+// horizontal (Guille, 24-10-2026). En el móvil se giran o se recortan, y
+// solo ahí.
+test('la lista del móvil gira o recorta solo la versión del móvil, y al cambiarla rehace solo esa', { skip }, () => {
+  const otro = join(dir, 'lista-movil');
+  mkdirSync(otro);
+  const clip = (grafo, nombre) => ff('-f', 'lavfi', '-i', grafo, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(otro, nombre));
+  // Rojo a la izquierda y azul a la derecha
+  const rojoAzul = 'color=c=red:s=160x180:d=1[a];color=c=blue:s=160x180:d=1[b];[a][b]hstack[out0]';
+  clip(rojoAzul, '301_Izquierda_T0.mov');
+  clip(rojoAzul, '302_Derecha_T0.mov');
+  clip(rojoAzul, '303_Tal cual_T0.mov');
+  // El vertical verde en medio de un cuadro negro, como en los proyectores
+  const enMedio = 'color=c=black:s=320x180:d=1[f];color=c=green:s=100x180:d=1[g];[f][g]overlay=x=110:y=0[out0]';
+  clip(enMedio, '304_Proyector_T0.mov.0.mov');
+  // Con la tilde aparte, como puede darla macOS
+  clip(enMedio, '305_Árbol_T0.mov');
+  const lista = join(dir, 'movil.csv');
+  writeFileSync(lista, [
+    '# lo que hay que hacer con cada uno en el móvil',
+    'Archivo;Móvil',
+    '301_Izquierda_T0;izquierda',
+    '302_Derecha_T0.mov;girar a la derecha',
+    '303_Tal cual_T0;',
+    '304_Proyector_T0;Recortar',
+    '305_Árbol_T0;recortar',
+    '399_No esta_T0;derecha',
+  ].join('\r\n'));
+  const salida = join(dir, 'lista-movil-media');
+  const pasar = () => spawnSync(process.execPath, [script, '--masters', otro, '--media', salida, '--movil', lista, '--solo', 'movil,monitor'], { encoding: 'utf8' });
+  const f = (v, base) => join(salida, v, `${base}.mp4`);
+  const tam = (v, base) => { const s = video(probe(f(v, base))); return `${s.width}x${s.height}`; };
+
+  let r = pasar();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  // Girado a la izquierda, lo que estaba a la derecha queda arriba
+  assert.equal(tam('movil', '301_Izquierda_T0'), '180x320');
+  assert.equal(color(f('movil', '301_Izquierda_T0'), 90, 20), 'azul');
+  assert.equal(color(f('movil', '301_Izquierda_T0'), 90, 300), 'rojo');
+  assert.equal(tam('movil', '302_Derecha_T0'), '180x320');
+  assert.equal(color(f('movil', '302_Derecha_T0'), 90, 20), 'rojo');
+  assert.equal(color(f('movil', '302_Derecha_T0'), 90, 300), 'azul');
+  assert.equal(tam('movil', '303_Tal cual_T0'), '320x180', 'sin nada en la columna, tal cual');
+  // 9:16 de 180 de alto son 101,25, que en par son 102, y del centro
+  assert.equal(tam('movil', '304_Proyector_T0.mov.0'), '102x180');
+  for (const x of [5, 51, 96]) assert.equal(color(f('movil', '304_Proyector_T0.mov.0'), x, 90), 'verde', `x=${x}`);
+  assert.equal(tam('movil', '305_Árbol_T0'), '102x180', 'la tilde aparte no lo despista');
+  // En la sala, todos tal cual
+  for (const base of ['301_Izquierda_T0', '302_Derecha_T0', '304_Proyector_T0.mov.0', '305_Árbol_T0']) assert.equal(tam('monitor', base), '320x180', base);
+  assert.equal(color(f('monitor', '301_Izquierda_T0'), 20, 90), 'rojo');
+  assert.equal(color(f('monitor', '304_Proyector_T0.mov.0'), 20, 90), 'negro');
+  assert.match(r.stdout, /399_No esta_T0 no está ni entre estos masters ni en media\/\. Mira si está bien escrito/);
+  assert.match(r.stdout, /301_Izquierda_T0\.mov .*\n\s+· en el móvil sale girado 90° a la izquierda/);
+  assert.match(r.stdout, /304_Proyector_T0\.mov\.0\.mov .*\n(?:\s+· .*\n)*\s+· en el móvil sale recortado al vertical del centro/);
+  const registro = () => JSON.parse(readFileSync(join(salida, 'versiones.json'), 'utf8')).masters;
+  assert.equal(registro()['301_Izquierda_T0.mov'].salidas.movil.ajuste, 'izquierda');
+  assert.equal(registro()['301_Izquierda_T0.mov'].salidas.monitor.ajuste, undefined);
+
+  // Sin cambios no se rehace nada. Al cambiar la lista, solo los móviles tocados.
+  r = pasar();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /todo está hecho/);
+  writeFileSync(lista, 'archivo,movil\n301_Izquierda_T0,derecha\n303_Tal cual_T0,izquierda\n304_Proyector_T0,recortar\n305_Árbol_T0,recortar\n');
+  r = pasar();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /3 versiones por hacer/, '301 cambia de lado, 302 sale de la lista y 303 entra');
+  assert.doesNotMatch(r.stdout, /\d+\/\d+\s+monitor/, 'las de la sala no se tocan');
+  assert.equal(color(f('movil', '301_Izquierda_T0'), 90, 20), 'rojo', 'ahora a la derecha');
+  assert.equal(tam('movil', '302_Derecha_T0'), '320x180', 'fuera de la lista vuelve a salir tal cual');
+  assert.equal(tam('movil', '303_Tal cual_T0'), '180x320');
+  assert.equal(registro()['302_Derecha_T0.mov'].salidas.movil.ajuste, undefined);
+});
+
+// Un vídeo girado hacia el lado malo sale boca abajo en todos los móviles.
+test('una lista del móvil que no cuadra dice cada fallo con su línea y no empieza', { skip }, () => {
+  const lista = join(dir, 'movil-mal.csv');
+  writeFileSync(lista, 'archivo,movil\n202_Bosque_T0,girar\n203_Bosque_T0,boca abajo\n,recortar\n204_Bosque_T0,derecha\n204_Bosque_T0.mov,izquierda\n');
+  const salida = join(dir, 'movil-mal-media');
+  const r = spawnSync(process.execPath, [script, '--masters', masters, '--media', salida, '--movil', lista], { encoding: 'utf8' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /línea 2, «girar» sin decir hacia qué lado \(izquierda o derecha\)/);
+  assert.match(r.stderr, /línea 3, no sé qué es «boca abajo»/);
+  assert.match(r.stderr, /línea 4, falta el nombre del vídeo/);
+  assert.match(r.stderr, /línea 6, 204_Bosque_T0\.mov ya salía antes con «derecha»/);
+  assert.ok(!existsSync(salida), 'no se ha puesto a hacer nada');
+  const sinColumna = join(dir, 'movil-sin-columna.csv');
+  writeFileSync(sinColumna, 'archivo,girar\n202_Bosque_T0,derecha\n');
+  const s = spawnSync(process.execPath, [script, '--masters', masters, '--media', salida, '--movil', sinColumna], { encoding: 'utf8' });
+  assert.equal(s.status, 1);
+  assert.match(s.stderr, /tiene que empezar con las columnas archivo y movil/);
 });

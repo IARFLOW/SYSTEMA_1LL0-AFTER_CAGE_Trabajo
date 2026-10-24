@@ -191,6 +191,25 @@ no la hay, el vídeo tal cual de `media/`, y si tampoco, la `tablet` o la
 demás), y si no la hay, lo mismo que un móvil, o sea primero la `movil`, luego
 el vídeo tal cual y luego la que quede.
 
+### Los que en el móvil van girados o recortados
+
+Las teles y los monitores van de pie, así que sus vídeos llevan la imagen
+tumbada, y en los proyectores el vertical va en medio de un cuadro horizontal.
+En la sala se ven bien, pero en el móvil saldrían tumbados o con mucho negro a
+los lados. Para eso está `data/movil.csv`, con una fila por vídeo
+(`archivo,movil`).
+
+- `izquierda` lo gira 90° en contra de las agujas del reloj. Es lo de las teles y los monitores, que para verlos derechos en el ordenador hay que girar la cabeza a la derecha.
+- `derecha` lo gira 90° a favor de las agujas del reloj.
+- `recortar` se queda con el vertical del centro (9:16, todo el alto).
+
+Solo cambia la versión `movil`. La `tablet` y la `monitor` salen tal cual. Ya
+está rellena con la lista de Guille del 24 de octubre. Si cambia algo, se edita
+y se vuelve a pasar `npm run versiones`, que rehace solo las versiones de móvil
+que han cambiado. Si un nombre de la lista no está ni entre los masters ni en
+`media/`, lo avisa, por si está mal escrito. Y si la lista lleva algo que no
+entiende, lo dice con su línea y no empieza.
+
 - `npm run versiones` apunta en `media/versiones.json` lo que ha hecho con cada master. Si pasáis masters desde otra carpeta (`npm run versiones -- --masters <carpeta>`), los de la otra no se borran del registro mientras sus MP4 sigan en `media/`. Así los audios de Juanlu no pierden el altavoz si Guille pasa los suyos desde otro sitio.
 - Si se copia la carpeta `media/` de otro ordenador, se copia antes de pasar vuestros masters, no después. Copiar un `versiones.json` encima borra las huellas de lo que ya estaba hecho, y la siguiente pasada vuelve a codificarlo todo.
 - Si un master está a medio copiar, `npm run versiones` lo dice y os pide que lo volváis a copiar.
@@ -435,7 +454,7 @@ router, `sala/router/`.
 
 ```
 web/
-├── data/            conceptos.csv, relaciones.csv  ← lo que editáis vosotros
+├── data/            conceptos.csv, relaciones.csv y movil.csv  ← lo que editáis vosotros
 ├── media/           los MP4, y media/movil, tablet y monitor con las versiones (fuera de git)
 ├── masters/         los masters para npm run versiones (fuera de git)
 ├── scripts/
@@ -515,6 +534,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - El arranque solo en el Mac de la sala (`sala/mac/`), con la comprobación de los ajustes del Mac.
 - Las pantallas por cable se abren solas en cada ordenador, en un Mac o en Windows, se reabren si se cierran, y si su pantalla se apaga se cierran y vuelven cuando se enciende (`sala/pantallas/`).
 - Los vídeos se buscan en `media/` en vivo, con sus versiones, y `npm run versiones` las saca de los masters.
+- En el móvil, los vídeos de las pantallas de pie salen derechos y los de los proyectores sin el negro de los lados (`data/movil.csv`, 24-10-2026).
 - Las relaciones salen solas de la sección, el proceso y el medio de cada concepto, en nube y no todos con todos, y cada tipo con su línea (continua, discontinua y punteada).
 - Las pantallas con el mismo vídeo van clavadas, con el reloj del servidor, aunque una cargue tarde o se atasque a mitad (20-10-2026, para las vídeo-partituras de los músicos).
 - Un móvil o una tablet que espera en negro no apaga la pantalla, con un vídeo negro en marcha por debajo (20-10-2026, probado en Chrome sin ventana, falta en un móvil de verdad).

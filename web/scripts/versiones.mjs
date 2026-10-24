@@ -9,6 +9,7 @@
 //   npm run versiones -- --forzar            rehace todo, aunque ya esté hecho
 //   npm run versiones -- --normalizar        iguala el volumen de todos a −16 LUFS
 //   npm run versiones -- --paralelo 2        cuántos ffmpeg a la vez
+//   npm run versiones -- --movil <fichero>   otra lista del móvil (por defecto data/movil.csv)
 //
 // Las versiones van así (el tope lo pone la Wi-Fi, no la potencia del aparato).
 //   movil    hasta 1280 × 720 (720 × 1280 si es vertical), unos 2,2 Mbps
@@ -31,6 +32,15 @@
 // (un vídeo vertical de móvil), con píxeles no cuadrados o entrelazado sale
 // derecho, cuadrado y progresivo. Se quitan los metadatos, que en un vídeo de
 // móvil llevan dónde se grabó.
+//
+// Hay vídeos que en la sala se ven bien y en el móvil no. Las teles y los
+// monitores van de pie y sus vídeos llevan la imagen tumbada, y en los
+// proyectores el vertical va en medio de un cuadro horizontal (Guille, el
+// 24-10-2026). La lista del móvil, data/movil.csv con las columnas archivo y
+// movil, dice qué hacer con cada uno, y solo en su versión de móvil.
+// «izquierda» lo gira 90° en contra de las agujas del reloj y «derecha» a
+// favor, y «recortar» se queda con el vertical del centro (9:16, todo el
+// alto). Las demás versiones salen tal cual.
 //
 // El volumen es cosa de la obra, así que por defecto no se toca. El informe
 // del final dice el de cada master (en LUFS) y avisa de los que se apartan
@@ -68,6 +78,7 @@ function opciones(argv) {
   const o = {
     masters: join(root, 'masters'),
     media: join(root, 'media'),
+    movil: join(root, 'data', 'movil.csv'),
     solo: Object.keys(PERFILES),
     forzar: false,
     normalizar: false,
@@ -81,6 +92,7 @@ function opciones(argv) {
     const a = argv[i];
     if (a === '--masters') { o.masters = resolve(valor(i, a)); i += 1; }
     else if (a === '--media') { o.media = resolve(valor(i, a)); i += 1; }
+    else if (a === '--movil') { o.movil = resolve(valor(i, a)); i += 1; }
     else if (a === '--solo') {
       o.solo = valor(i, a).split(',').map((s) => s.trim()).filter(Boolean);
       const raras = o.solo.filter((s) => !PERFILES[s]);
@@ -101,6 +113,75 @@ function fallar(texto) {
   console.error(`no puedo hacer las versiones, ${texto}`);
   process.exit(1);
 }
+
+// ---------------------------------------------------------------------------
+// La lista del móvil
+// ---------------------------------------------------------------------------
+const AJUSTES = {
+  izquierda: 'girado 90° a la izquierda',
+  derecha: 'girado 90° a la derecha',
+  recortar: 'recortado al vertical del centro',
+};
+const sinTildes = (s) => String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+
+// El mismo vídeo aunque venga con su extensión, con el «.mov.0» de
+// TouchDesigner, con otras mayúsculas o con las tildes guardadas de otra
+// forma (macOS puede dar la tilde de «Río» aparte, y entonces no es igual a
+// la de la lista).
+function claveDeVideo(nombre) {
+  let n = String(nombre).normalize('NFC').trim();
+  const ext = extname(n).toLowerCase();
+  if (VIDEO.includes(ext) || AUDIO.includes(ext)) n = n.slice(0, -ext.length);
+  return n.replace(/(?:\.(?:mov|mp4|m4v))*\.\d+$/i, '').toLowerCase();
+}
+
+// Separada por comas o por punto y coma, en UTF-8 o en la codificación
+// antigua de Windows o de Mac, y con «#» delante para las notas. Si algo no
+// cuadra se dicen todos los fallos con su línea y no se hace nada, que un
+// vídeo girado hacia el lado malo sale boca abajo en todos los móviles.
+function leerLista(ruta) {
+  const lista = new Map();
+  if (!existsSync(ruta)) return lista;
+  const crudo = readFileSync(ruta);
+  let texto;
+  try { texto = new TextDecoder('utf-8', { fatal: true }).decode(crudo); } catch { texto = new TextDecoder('windows-1252').decode(crudo); }
+  const nombre = relative(process.cwd(), ruta) || ruta;
+  const errores = [];
+  let cols = null;
+  let sep = ',';
+  texto.replace(/^\uFEFF/, '').split(/\r\n|\r|\n/).forEach((linea, i) => {
+    if (!linea.trim() || linea.trimStart().startsWith('#')) return;
+    if (!cols) {
+      sep = linea.split(';').length > linea.split(',').length ? ';' : ',';
+      const titulos = linea.split(sep).map((c) => sinTildes(c.replace(/"/g, '')));
+      cols = { archivo: titulos.indexOf('archivo'), movil: titulos.indexOf('movil') };
+      if (cols.archivo < 0 || cols.movil < 0) fallar(`${nombre} tiene que empezar con las columnas archivo y movil`);
+      return;
+    }
+    const celdas = linea.split(sep).map((c) => c.trim().replace(/^"([\s\S]*)"$/, '$1').replace(/""/g, '"').trim());
+    const archivo = celdas[cols.archivo] ?? '';
+    const dice = celdas[cols.movil] ?? '';
+    const valor = sinTildes(dice);
+    if (!valor) return;
+    const donde = `${nombre}, línea ${i + 1}`;
+    if (!archivo) { errores.push(`${donde}, falta el nombre del vídeo`); return; }
+    let ajuste = null;
+    if (/^recort/.test(valor)) ajuste = 'recortar';
+    else if (valor.includes('izquierda') && !valor.includes('derecha')) ajuste = 'izquierda';
+    else if (valor.includes('derecha') && !valor.includes('izquierda')) ajuste = 'derecha';
+    else if (/^girar?$/.test(valor)) { errores.push(`${donde}, «${dice}» sin decir hacia qué lado (izquierda o derecha)`); return; }
+    else { errores.push(`${donde}, no sé qué es «${dice}» (vale izquierda, derecha o recortar)`); return; }
+    const clave = claveDeVideo(archivo);
+    const antes = lista.get(clave);
+    if (antes && antes.ajuste !== ajuste) { errores.push(`${donde}, ${archivo} ya salía antes con «${antes.ajuste}»`); return; }
+    lista.set(clave, { archivo, ajuste });
+  });
+  if (errores.length) fallar(`la lista del móvil no cuadra\n${errores.map((e) => `  · ${e}`).join('\n')}`);
+  return lista;
+}
+
+// El ajuste de la lista es solo para la versión de móvil.
+const ajusteDe = (m, v) => (v === 'movil' ? m.ajusteMovil ?? null : null);
 
 // ---------------------------------------------------------------------------
 // Lo que hay en cada master
@@ -188,14 +269,24 @@ function medirLoudnorm(ruta) {
 const par = (x) => Math.max(2, Math.round(x / 2) * 2);
 
 // La imagen tal como se ve (girada y con píxeles cuadrados) metida en la caja
-// de la versión, sin agrandar nunca.
-function medidas(video, caja) {
+// de la versión, sin agrandar nunca. Con el ajuste de la lista del móvil,
+// antes se recorta al vertical del centro o se gira. `recorte` es el ancho
+// del recorte en píxeles de la imagen que llega al filtro, que ffmpeg ya ha
+// enderezado si el master traía la marca de giro.
+function medidas(video, caja, ajuste = null) {
   let ancho = video.ancho * video.sar.v;
   let alto = video.alto;
   if (video.giro === 90 || video.giro === 270) [ancho, alto] = [alto, ancho];
+  let recorte = null;
+  if (ajuste === 'recortar') {
+    const px = video.giro === 90 || video.giro === 270 ? video.alto : video.ancho;
+    recorte = Math.min(px, par(((alto * 9) / 16) * (px / ancho)));
+    ancho = recorte * (ancho / px);
+  }
+  if (ajuste === 'izquierda' || ajuste === 'derecha') [ancho, alto] = [alto, ancho];
   const [cw, ch] = ancho >= alto ? caja : [caja[1], caja[0]];
   const k = Math.min(1, cw / ancho, ch / alto);
-  return { ancho: par(ancho * k), alto: par(alto * k) };
+  return { ancho: par(ancho * k), alto: par(alto * k), recorte };
 }
 
 // Por encima de 30 fps, entre el entero más pequeño que los deja en 30 o menos.
@@ -230,11 +321,15 @@ function avisosDe(m) {
   return avisos;
 }
 
-function filtrosVideo(m, perfil) {
+function filtrosVideo(m, perfil, ajuste = null) {
   const v = m.video;
-  const { ancho, alto } = medidas(v, perfil.caja);
+  const { ancho, alto, recorte } = medidas(v, perfil.caja, ajuste);
   const f = [];
   if (!['progressive', 'unknown'].includes(v.campos)) f.push('bwdif=mode=send_frame:parity=auto:deint=all');
+  // Sin x ni y, crop se queda con el centro.
+  if (recorte) f.push(`crop=${recorte}:ih`);
+  if (ajuste === 'izquierda') f.push('transpose=cclock');
+  if (ajuste === 'derecha') f.push('transpose=clock');
   // Matriz de color. Si el master es SD (Rec.601) o no lo dice y es pequeño,
   // se pasa a Rec.709, que es la que se etiqueta a la salida. Si ya es 709 o
   // no lo dice y es HD, se deja tal cual, que convertir de más tiñe los colores.
@@ -271,7 +366,7 @@ function argumentosAudio(loud) {
   return ['-af', filtro, '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000'];
 }
 
-function orden(m, perfil, entrada, salida, loud) {
+function orden(m, perfil, entrada, salida, loud, ajuste = null) {
   const comun = ['-hide_banner', '-nostdin', '-y', '-v', 'error'];
   const final = ['-map_metadata', '-1', '-map_chapters', '-1', '-movflags', '+faststart', '-f', 'mp4', salida];
   if (!m.video) {
@@ -288,7 +383,7 @@ function orden(m, perfil, entrada, salida, loud) {
       ancho: 1280, alto: 720, fps,
     };
   }
-  const { filtros, ancho, alto, fps } = filtrosVideo(m, perfil);
+  const { filtros, ancho, alto, fps } = filtrosVideo(m, perfil, ajuste);
   return {
     args: [...comun, '-i', entrada, '-map', `0:${m.indiceVideo}`, ...(m.audio ? ['-map', `0:${m.audio.index}`] : []),
       '-vf', filtros, '-fps_mode', 'cfr', ...argumentosX264(perfil, fps),
@@ -407,6 +502,8 @@ async function main() {
   const o = opciones(process.argv.slice(2));
   try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); } catch { fallar('hace falta ffmpeg (brew install ffmpeg)'); }
   if (!existsSync(o.masters)) fallar(`no encuentro la carpeta de masters ${o.masters}`);
+  // Antes que nada, que si no cuadra no se empieza.
+  const lista = leerLista(o.movil);
 
   const entradas = readdirSync(o.masters).filter((f) => !f.startsWith('.'));
   const nombres = entradas.filter((f) => statSync(join(o.masters, f)).isFile()).sort();
@@ -466,6 +563,32 @@ async function main() {
     }
   }
 
+  // La lista del móvil. Lo que no esté ni entre estos masters ni en media/
+  // seguramente está mal escrito, y se dice. Pero solo si la lista tiene algo
+  // que ver con esta pasada, que una carpeta de audios con un media/ recién
+  // hecho no comparte ningún nombre con ella.
+  const conocidos = new Set();
+  for (const m of estudiados) {
+    const clave = claveDeVideo(m.base);
+    const e = lista.get(clave);
+    if (!e) continue;
+    conocidos.add(clave);
+    if (m.roto) continue;
+    if (!m.video) console.log(`  · ${m.fichero} es solo audio, así que lo de «${e.ajuste}» de la lista del móvil no se le hace`);
+    else m.ajusteMovil = e.ajuste;
+  }
+  for (const d of [join(o.media, 'movil'), o.media]) {
+    try {
+      for (const f of readdirSync(d)) if (extname(f).toLowerCase() === '.mp4') conocidos.add(claveDeVideo(f));
+    } catch { /* todavía no hay versiones */ }
+  }
+  if ([...lista.keys()].some((k) => conocidos.has(k))) {
+    const nombre = relative(process.cwd(), o.movil) || o.movil;
+    for (const [k, e] of lista) {
+      if (!conocidos.has(k)) console.log(`  · en ${nombre}, ${e.archivo} no está ni entre estos masters ni en media/. Mira si está bien escrito`);
+    }
+  }
+
   // Qué masters son solo audio, para que el móvil del público ponga el
   // altavoz encima del negro. En los que ya estaban hechos también se apunta,
   // sin volver a codificar nada.
@@ -481,7 +604,9 @@ async function main() {
     const previo = manifiesto.masters[m.fichero];
     for (const v of o.solo) {
       const salida = join(o.media, v, `${m.base}.mp4`);
-      const hecho = previo?.huella === m.huella && previo?.salidas?.[v] && existsSync(salida);
+      // Si cambia lo de la lista del móvil, se rehace esa versión y nada más.
+      const hecho = previo?.huella === m.huella && previo?.salidas?.[v]
+        && (previo.salidas[v].ajuste ?? null) === ajusteDe(m, v) && existsSync(salida);
       if (hecho && !o.forzar) continue;
       tareas.push({ m, v, salida });
     }
@@ -505,7 +630,8 @@ async function main() {
     const parte = join(dirname(t.salida), `.${t.m.base}.parte.mp4`);
     aMedias.add(parte);
     try {
-      const plan = orden(t.m, PERFILES[t.v], t.m.ruta, parte, o.normalizar ? t.m.loud : null);
+      const ajuste = ajusteDe(t.m, t.v);
+      const plan = orden(t.m, PERFILES[t.v], t.m.ruta, parte, o.normalizar ? t.m.loud : null, ajuste);
       await correr(plan.args);
       const r = comprobar(parte, plan, t.m);
       if (r.fallos.length) throw new Error(r.fallos.join(', '));
@@ -520,6 +646,7 @@ async function main() {
       nueva.salidas[t.v] = {
         fichero: `${t.v}/${t.m.base}.mp4`, ancho: plan.ancho, alto: plan.alto,
         fps: Math.round(plan.fps.v * 1000) / 1000, kbps: r.kbps, bytes: r.bytes,
+        ...(ajuste ? { ajuste } : {}),
       };
       manifiesto.masters[t.m.fichero] = nueva;
       writeFileSync(manifiestoRuta, `${JSON.stringify(manifiesto, null, 2)}\n`);
@@ -561,6 +688,7 @@ async function main() {
     const vol = typeof e?.lufs === 'number' ? `${String(e.lufs).replace('.', ',')} LUFS` : (m.audio ? 'volumen sin medir' : 'sin sonido');
     console.log(`${m.fichero}  ${que}, ${(m.duracion || 0).toFixed(1).replace('.', ',')} s, ${vol}`);
     for (const a of m.avisos ?? []) console.log(`    · ${a}`);
+    if (m.ajusteMovil) console.log(`    · en el móvil sale ${AJUSTES[m.ajusteMovil]}`);
     if (med !== null && typeof e?.lufs === 'number' && Math.abs(e.lufs - med) >= 6 && !o.normalizar) {
       console.log(`    · suena ${e.lufs > med ? 'mucho más fuerte' : 'mucho más bajo'} que el resto (${Math.abs(e.lufs - med).toFixed(0)} LU de la mediana), mira si es a propósito`);
     }
