@@ -204,7 +204,8 @@ los lados. Para eso está `data/movil.csv`, con una fila por vídeo
 - `recortar` se queda con el vertical del centro (9:16, todo el alto).
 
 Solo cambia la versión `movil`. La `tablet` y la `monitor` salen tal cual. Ya
-está rellena con la lista de Guille del 24 de octubre. Si cambia algo, se edita
+está rellena con la lista de Guille del 24 de octubre y con los textos de las
+teles de la del 26 (del 321 al 340). Si cambia algo, se edita
 y se vuelve a pasar `npm run versiones`, que rehace solo las versiones de móvil
 que han cambiado. Si un nombre de la lista no está ni entre los masters ni en
 `media/`, lo avisa, por si está mal escrito. Y si la lista lleva algo que no

@@ -7,7 +7,9 @@
 #   recortar   se queda con el vertical del centro (9:16, todo el alto). Es
 #              para los de los proyectores, que lo llevan en medio del cuadro
 # Un vídeo que no está aquí sale tal cual. Lista de Guille del 24-10-2026, con
-# el 237 y el 242, que se le quedaron sin poner.
+# el 237 y el 242, que se le quedaron sin poner, y los textos de las teles de
+# su lista del 26-10-2026 (del 321 al 340). Los de los móviles (301 a 320) y
+# los de los iPads (341 a 360) ya van derechos.
 archivo,movil
 201_Bosque_T0,recortar
 202_Bosque_T0,izquierda
@@ -35,3 +37,23 @@ archivo,movil
 246_Programa artístico_T4_A,recortar
 248_Comisariado_T4_A,izquierda
 249_Instalación_T4_E,izquierda
+321_Caudal_T0_J,izquierda
+322_Intersticio_T0_J,izquierda
+323_Periferia_T0_J,izquierda
+324_Rebote_T0_J,izquierda
+325_Sedimento_T0_J,izquierda
+326_Tras el muro_T0_J,izquierda
+327_Desborde_T0_K,izquierda
+328_Huella_T0_K,izquierda
+329_Montaje_T0_K,izquierda
+330_Fuera de campo_T0_K,izquierda
+331_Inscripción_T0_K,izquierda
+332_Gradiente_T0_L,izquierda
+333_Entre vecinos_T0_L,izquierda
+334_Equidistancia_T0_L,izquierda
+335_Engranaje_T0_L,izquierda
+336_Retorno_T0_L,izquierda
+337_Resonancia_T0_M,izquierda
+338_Molde_T0_M,izquierda
+339_Desafinación_T0_M,izquierda
+340_Foco_T0_M,izquierda
