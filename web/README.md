@@ -292,7 +292,13 @@ que ponen el mismo vídeo van clavadas. Cada una mide su reloj contra el del
 servidor y, si se separa, acelera o frena un poco hasta volver, o salta si se
 ha ido más de 0,3 s, así que la que tarda en cargar o se atasca a mitad no se
 queda detrás. En Chrome, con una de dos cargando 1,5 s tarde, quedaron a entre
-0 y 20 ms en diez rondas (20-10-2026). Cada una va con la hora de su disparo,
+0 y 20 ms en diez rondas (20-10-2026). Lo que suena no se acelera ni se frena
+nunca, solo salta si se va más de 0,3 s, porque al cambiarle la velocidad el
+navegador estira el sonido a trozos y en un sonido seguido se oyen chasquidos
+(el 102 de Juanlu, 26-10-2026). Así que dos pantallas con el mismo vídeo con
+sonido pueden ir algo menos clavadas. Del 900 en adelante, las
+vídeo-partituras, van siempre clavadas, aunque traigan pista de sonido, porque
+ahí manda que los músicos vayan a la vez. Cada una va con la hora de su disparo,
 así que los mensajes del Max para varias pantallas tienen que salir a la vez,
 en la misma línea de la coll o en un bundle. Si se
 corta la Wi-Fi, lo que está poniendo sigue, avisa abajo a la izquierda y

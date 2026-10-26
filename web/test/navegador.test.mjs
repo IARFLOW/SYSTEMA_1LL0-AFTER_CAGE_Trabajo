@@ -34,6 +34,9 @@ before(async () => {
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=20', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-shortest', '-movflags', '+faststart', join(media, 'con.mp4')]);
   writeFileSync(join(media, 'roto.mp4'), Buffer.alloc(4096, 7));      // no es un vídeo
+  // Sin pista de sonido, como una vídeo-partitura.
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=20',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(media, 'mudo.mp4')]);
   // Tres vídeos de la misma palabra, como los de Guille para varias pantallas.
   for (const f of ['b1', 'b2', 'b3']) copyFileSync(join(media, 'con.mp4'), join(media, `${f}.mp4`));
   // Un audio, en negro y con su versión de móvil, como lo deja npm run versiones.
@@ -56,6 +59,7 @@ before(async () => {
     bosque_sin: { duration: 20, num: 203 },
     // Del 900 en adelante, solo para Max. Está en contents.json y no en el mapa.
     partitura: { archivo: 'con.mp4', duration: 20, num: 901 },
+    mudo: { archivo: 'mudo.mp4', duration: 20, num: 6 },
   }));
   writeFileSync(join(cat, 'map.json'), JSON.stringify({
     version: 2, width: 1400, height: 2000, font: { 1: 44, 2: 31, 3: 24 }, advance: 0.612,
@@ -240,6 +244,83 @@ test('dos pantallas con el mismo vídeo van clavadas, aunque una cargue tarde o 
     await max.send('/musico2/video', 0);
     await max.close();
     await Promise.all([p1.close(), p2.close()]);
+  }
+});
+
+// Juanlu, el 26-10-2026: el 102 sonaba entrecortado en la pantalla y bien
+// abierto tal cual. Para ir al compás la pantalla aceleraba y frenaba un poco,
+// y el navegador, para no cambiar el tono, estiraba el sonido a trozos.
+test('lo que suena en una pantalla no se acelera ni se frena, y lo que no suena o es una partitura sigue yendo al compás', { skip, timeout: 90000 }, async () => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const espera = (ms) => new Promise((r) => { setTimeout(r, ms); });
+  const v = `document.getElementById('video')`;
+  const s = await launch();
+  const poner = async (num, fichero) => {
+    await max.send('/tele5/video', num);
+    // Que ya sea el fichero nuevo. Si no, el tiempo que se mira es el del de antes.
+    await s.until(`${v}.currentSrc.includes('/${fichero}') && ${v}.currentTime > 1.5`, 10000);
+  };
+  // Se la echa 0,15 s atrás, menos de lo que hace saltar, y se apuntan las
+  // velocidades por las que pasa en los 2,5 s siguientes. Si antes no se
+  // corregía, se le deja `asentar` para que empiece clavada, que si ya iba
+  // atrasada pasaría de 0,3 s y saltaría en vez de acelerar.
+  const velocidades = async (asentar = 0) => {
+    await espera(asentar);
+    await s.evaluate(`(() => { window.vel = []; ${v}.onratechange = () => { window.vel.push(${v}.playbackRate); }; ${v}.currentTime -= 0.15; return true; })()`);
+    await espera(2500);
+    return s.evaluate('window.vel');
+  };
+  const vuelveAlCompas = (vel, que) => assert.ok(Math.max(...vel) > 1.05, `${que} acelera para volver al compás (${vel.slice(0, 8).join(', ')})`);
+  const noSeToca = async (vel, que) => {
+    assert.deepEqual(vel, [], `${que} no cambia de velocidad`);
+    assert.equal(await s.evaluate(`${v}.playbackRate`), 1);
+  };
+  try {
+    await goto(s, `${base}/screen/tele5`);
+    // Sin el toque va en silencio y se corrige como siempre. El toque la deja
+    // a velocidad normal en ese mismo momento, antes de que suene. Se mira
+    // justo después de que la página atienda el toque, que si no lo haría
+    // igual el compás en el siguiente cuarto de segundo.
+    await poner(1, 'con.mp4');
+    assert.equal(await s.evaluate(`${v}.muted`), true, 'sin el toque no suena');
+    await s.evaluate(`(() => { ${v}.currentTime -= 0.15; return true; })()`);
+    await s.until(`${v}.playbackRate > 1.05`, 3000);
+    await s.evaluate(`(() => { document.addEventListener('touchend', () => { window.alTocar ??= [${v}.playbackRate, ${v}.muted]; }); return true; })()`);
+    await s.tap(100, 100);
+    assert.deepEqual(await s.evaluate('window.alTocar'), [1, false], 'al tocar, velocidad normal y con sonido');
+
+    // Con el sonido activado, un vídeo con sonido no cambia de velocidad.
+    await espera(500);
+    assert.ok(await s.evaluate(`${v}.webkitAudioDecodedByteCount > 0`), 'con.mp4 suena');
+    await noSeToca(await velocidades(), 'con sonido');
+
+    // Uno sin pista de sonido sí, y hacia donde tiene que ir.
+    await poner(6, 'mudo.mp4');
+    assert.equal(await s.evaluate(`${v}.webkitAudioDecodedByteCount`), 0, 'mudo.mp4 no trae sonido');
+    vuelveAlCompas(await velocidades(1500), 'sin sonido');
+
+    // Una partitura (del 900 en adelante) también, aunque traiga sonido.
+    await poner(901, 'con.mp4');
+    assert.ok(await s.evaluate(`${v}.webkitAudioDecodedByteCount > 0`), 'la partitura de prueba suena');
+    vuelveAlCompas(await velocidades(1500), 'una partitura con sonido');
+
+    // Safari dice si hay sonido en audioTracks, que Chrome no tiene. Se le pone
+    // al vídeo para ver que manda sobre lo demás.
+    const pistas = (n) => s.evaluate(`(() => { Object.defineProperty(${v}, 'audioTracks', { configurable: true, get: () => ({ length: ${n} }) }); return true; })()`);
+    await poner(6, 'mudo.mp4');
+    await pistas(1);
+    await espera(500);   // si iba acelerando, que vuelva a la normal antes de mirar
+    await noSeToca(await velocidades(), 'con audioTracks de 1');
+    await poner(1, 'con.mp4');
+    await pistas(0);
+    vuelveAlCompas(await velocidades(1500), 'con audioTracks de 0');
+    await s.evaluate(`(() => { delete ${v}.audioTracks; return true; })()`);
+    assert.deepEqual(s.errores, [], 'ningún error de JavaScript');
+  } finally {
+    await max.send('/tele5/video', 0);
+    await max.close();
+    await s.close();
   }
 });
 
