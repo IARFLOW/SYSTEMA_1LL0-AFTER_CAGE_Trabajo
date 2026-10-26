@@ -54,6 +54,8 @@ before(async () => {
     bosque_201: { archivo: 'b2.mp4', duration: 20, num: 201 },
     bosque_202: { archivo: 'b3.mp4', duration: 20, num: 202 },
     bosque_sin: { duration: 20, num: 203 },
+    // Del 900 en adelante, solo para Max. Está en contents.json y no en el mapa.
+    partitura: { archivo: 'con.mp4', duration: 20, num: 901 },
   }));
   writeFileSync(join(cat, 'map.json'), JSON.stringify({
     version: 2, width: 1400, height: 2000, font: { 1: 44, 2: 31, 3: 24 }, advance: 0.612,
@@ -315,6 +317,32 @@ test('una palabra con varios vídeos pone uno al azar, otro al volver a tocarla,
   } finally {
     await max.close();
   }
+});
+
+// Las partituras del concierto (del 900 en adelante) las pone Max en el móvil
+// de un músico, pero no están en el mapa. Al público le llega igual que suenan.
+test('una partitura en el móvil de un músico no rompe el del público ni le enciende nada', { skip, timeout: 20000 }, async () => {
+  const antes = b.errores.length;
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const con = `document.querySelector('[data-id="con"]').classList.contains('active')`;
+  try {
+    await max.send('/musico1/video', 901);
+    for (let j = 0; j < 30 && !/^active .*partitura/m.test(await health()); j += 1) await new Promise((r) => { setTimeout(r, 100); });
+    assert.match(await health(), /^active .*partitura/m, 'el servidor la pone por su número');
+    // Contraprueba: lo que sí está en el mapa se enciende, así que al móvil le
+    // llegan los avisos de la sala, también el de la partitura.
+    await max.send('/tele1/video', 1);
+    await b.until(con, 4000);
+    assert.equal(await b.evaluate(`document.querySelectorAll('[data-id].active').length`), 1, 'solo la palabra del mapa');
+    assert.equal(await b.evaluate(`document.querySelectorAll('#live-list .entry:not([aria-hidden="true"])').length`), 1, 'y en «en sala», solo ella (la que se está borrando de la prueba de antes no cuenta)');
+    assert.deepEqual(b.errores.slice(antes), [], 'ningún error de JavaScript');
+  } finally {
+    await max.send('/musico1/video', 0);
+    await max.send('/tele1/video', 0);
+    await max.close();
+  }
+  await b.until(`!${con}`, 4000);
 });
 
 test('un audio lleva el altavoz en el móvil del público, un vídeo no, y una pantalla de la sala nunca', { skip, timeout: 40000 }, async () => {

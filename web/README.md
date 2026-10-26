@@ -93,7 +93,7 @@ simulado».
 
 ## Cambiar conceptos y relaciones (sin tocar código)
 
-1. Editar `data/conceptos.csv` (`id,etiqueta,archivo,duracion,numero`, y si se quiere `nivel`, `seccion`, `proceso` y `medio`) y `data/relaciones.csv` (`origen,destino`). `numero` es el número con el que el Max pide ese vídeo a una pantalla (`/tele1/video 3`). Tiene que ser un entero desde el 1 y sin repetir, porque el 0 es negro. En la hoja de ejemplo van del 1 al 50 por orden. Un concepto sin número sale en el mapa igual, pero ninguna pantalla lo puede poner. `nivel` dice el tamaño de la palabra. El 1 son los conceptos principales (los más grandes, en negrita), el 2 los secundarios (en negrita) y el 3 el resto. Sin esa columna el nivel sale de las relaciones, y los 8 conceptos más conectados son de nivel 1 y los 16 siguientes, de nivel 2. Si se usa, lo que se deje vacío es nivel 3.
+1. Editar `data/conceptos.csv` (`id,etiqueta,archivo,duracion,numero`, y si se quiere `nivel`, `seccion`, `proceso` y `medio`) y `data/relaciones.csv` (`origen,destino`). `numero` es el número con el que el Max pide ese vídeo a una pantalla (`/tele1/video 3`). Tiene que ser un entero desde el 1 y sin repetir, porque el 0 es negro. En la hoja de ejemplo van del 1 al 50 por orden. Un concepto sin número sale en el mapa igual, pero ninguna pantalla lo puede poner. Uno del 900 en adelante, al revés, lo pone el Max pero no sale en el mapa (más abajo, «Las partituras»). `nivel` dice el tamaño de la palabra. El 1 son los conceptos principales (los más grandes, en negrita), el 2 los secundarios (en negrita) y el 3 el resto. Sin esa columna el nivel sale de las relaciones, y los 8 conceptos más conectados son de nivel 1 y los 16 siguientes, de nivel 2. Si se usa, lo que se deje vacío es nivel 3.
    Valen tal como los guarde Excel, Numbers o LibreOffice. Pueden ir con comas o con punto y coma (Excel en español usa punto y coma), con comillas, en UTF-8, UTF-16 o la codificación antigua de Windows o de Mac, y con las columnas con o sin tilde («Nº vídeo» o «duración (s)» también valen). La duración se puede escribir como salga, `1:30`, `45s`, `2m30` o `1 min` (y `1,30` lo lee como 1:30, avisando). Las relaciones se pueden escribir por id o por etiqueta.
 2. `npm run layout` → recalcula las posiciones con d3-force y escribe `public/map.json` y `public/contents.json`. Cada palabra se coloca con una caja de su tamaño real, así que ninguna pisa a otra (en Space Mono cada letra mide 0,612 em, y el ancho se sabe sin navegador). Si algo no cuadra, lista todos los errores de una vez, cada uno con su línea, y no toca el mapa que había. También avisa de lo que antes pasaba en silencio, como columnas que no conoce o celdas vacías en las relaciones.
 3. Recargar la web. Al servidor no hace falta reiniciarlo, y los móviles que estén abiertos recargan solos cuando cambia la hoja.
@@ -136,6 +136,24 @@ tildes dan igual.
   números, para ver que no se ha juntado nada por error.
 
 Hasta el 22-10-2026 la palabra salía repetida en el mapa, una vez por fila.
+
+### Las partituras, del 900 en adelante
+
+Lo que lleve un número del 900 en adelante lo puede poner el Max en cualquier
+pantalla, como lo demás, pero no sale en el mapa del público. Es para las
+partituras de los músicos del concierto del 29-10-2026, que se piden por número
+y no son palabras (lo pidió Juanlu el 26-10-2026).
+
+- Se meten como el resto, en la hoja o con el nombre del vídeo
+  (`901_Partitura 1_P.mov`), y pasan por `npm run versiones` igual.
+- El Max las pide como siempre (`/musico1/video 901`). En el panel salen con
+  su id (`partitura_1`).
+- En los móviles del público no salen en el mapa, ni en «en sala» cuando
+  suenan.
+- No se juntan con una palabra aunque lleven su misma etiqueta, y una
+  relación de `relaciones.csv` con una de ellas no para el layout. Se avisa y
+  no se pinta.
+- Al pasar el layout se dice cuántas hay.
 
 Las relaciones también salen solas de tres columnas de `conceptos.csv`, `seccion` (T0, T1…), `proceso` (golpe, gota/rebote, ciclo…) y `medio` (audio, vídeo, texto…). Al pasar el layout se unen los que comparten algo, sin unirlos todos con todos. Cada concepto se une con 2 de su grupo, o con los que digas en `npm run layout -- --enlaces 3`. Si a alguno le toca quedarse sin ninguna, se une con el que menos lleve, aunque ese pase de 2. Cuáles se unen lo decide una huella de cada pareja y no el azar, así que con la misma hoja sale siempre el mismo mapa. Una celda puede llevar varios separados por comas («golpe, ciclo», y si la hoja va con comas, entre comillas, que Excel y Numbers ya las ponen), la barra va dentro del nombre («gota/rebote» es uno), y mayúsculas y tildes dan igual. Si uno es el único de su grupo te lo avisa, por si es una errata. En el mapa, las de la sección van continuas, las del proceso discontinuas y las del medio punteadas. Las de `relaciones.csv` siguen valiendo para unir dos a mano, van continuas y ganan si la pareja ya va unida por otra cosa, que ninguna se pinta dos veces. Al colocar las palabras, la sección es la que más junta, y cada una sale como una isla. El proceso junta menos y el medio casi nada, porque une palabras de todas las secciones y apelotonaría el mapa. Encendida, cualquier línea lleva la señal que corre por encima.
 

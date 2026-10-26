@@ -309,9 +309,16 @@ if (nuevas.length) {
 }
 
 // ---------- Conceptos ----------
+// Desde este número, Max lo puede poner en una pantalla, pero no sale en el
+// mapa del público. Es para las partituras de los músicos (901_Partitura
+// 1_P.mov y así), que se piden por número y no son palabras (lo pidió Juanlu el
+// 26-10-2026, para el concierto del 29). Van en contents.json, que es de donde
+// saca el servidor los números, y en map.json no.
+const SOLO_MAX = 900;
 const ids = new Map();
 const byLabel = new Map();
 const nums = new Map();
+const soloMax = new Map();   // id y etiqueta → fila, para explicar una relación con ellas
 for (const c of conceptos) {
   if (!c.etiqueta) { errors.push(`conceptos.csv, línea ${c.line}, falta la etiqueta`); continue; }
   if (!c.id) {
@@ -324,15 +331,6 @@ for (const c of conceptos) {
   }
   if (ids.has(c.id)) { errors.push(`conceptos.csv, línea ${c.line}, el id «${c.id}» ya está en la línea ${ids.get(c.id).line}`); continue; }
   ids.set(c.id, c);
-  // Las filas con la misma etiqueta son una sola palabra en el mapa con varios
-  // vídeos, uno por fila, cada uno con su número para Max (lo pidió Guille el
-  // 22-10-2026, con el mismo concepto visto desde varias pantallas). La
-  // palabra lleva el id de la primera fila. Hasta entonces salía la misma
-  // palabra repetida, una por fila.
-  if (!byLabel.has(norm(c.etiqueta))) {
-    byLabel.set(norm(c.etiqueta), c.id);
-    c.filas = [c];
-  } else ids.get(byLabel.get(norm(c.etiqueta))).filas.push(c);
   // El número con el que lo pide Max. Dos conceptos con el mismo número
   // harían que la pantalla pusiera uno y el mapa encendiera el otro.
   if (c.numero) {
@@ -346,6 +344,20 @@ for (const c of conceptos) {
       c.num = n;
     }
   }
+  if (c.num >= SOLO_MAX) {
+    soloMax.set(c.id, c);
+    soloMax.set(norm(c.etiqueta), c);
+    continue;
+  }
+  // Las filas con la misma etiqueta son una sola palabra en el mapa con varios
+  // vídeos, uno por fila, cada uno con su número para Max (lo pidió Guille el
+  // 22-10-2026, con el mismo concepto visto desde varias pantallas). La
+  // palabra lleva el id de la primera fila. Hasta entonces salía la misma
+  // palabra repetida, una por fila.
+  if (!byLabel.has(norm(c.etiqueta))) {
+    byLabel.set(norm(c.etiqueta), c.id);
+    c.filas = [c];
+  } else ids.get(byLabel.get(norm(c.etiqueta))).filas.push(c);
   // Nivel 1 para los conceptos principales, 2 los secundarios y 3 el resto.
   if (c.nivel) {
     const lv = Number(c.nivel);
@@ -380,6 +392,13 @@ for (const r of relaciones) {
   }
   const a = resolve(r.origen);
   const b = resolve(r.destino);
+  // Con una partitura no es un error que pare el mapa, porque la fila está
+  // bien. Solo que no hay palabra que unir.
+  const fuera = [!a && r.origen, !b && r.destino].map((v) => v && (soloMax.get(v) ?? soloMax.get(norm(v)))).find(Boolean);
+  if (fuera) {
+    warnings.push(`relaciones.csv, línea ${r.line}, «${fuera.etiqueta}» lleva el ${fuera.num}, y desde el ${SOLO_MAX} no sale en el mapa, así que esa relación no la pinto`);
+    continue;
+  }
   if (!a || !b) {
     const which = [!a && `«${r.origen}»`, !b && `«${r.destino}»`].filter(Boolean).join(' ni ');
     errors.push(`relaciones.csv, línea ${r.line}, no hay ningún concepto ${which}`);
@@ -864,7 +883,9 @@ console.log(`map.json lleva ${out.nodes.length} palabras (${per.join(' / ')} de 
   + (anchored ? `. Hay ${byHand} fijadas a mano, ${kept} conservadas y ${fresh} colocadas ahora` : ''));
 console.log(`lienzo ${canvas.width} × ${canvas.height}, las palabras ocupan ${Math.round(used.x1 - used.x0)} × ${Math.round(used.y1 - used.y0)}`
   + `${stuck.length ? '' : ', ninguna pisa a otra'}`);
-console.log(`contents.json lleva ${Object.keys(contents).length} contenidos, ${[...ids.values()].filter((c) => c.file).length} con vídeo y ${nums.size} con número para Max`);
+const partituras = [...ids.values()].filter((c) => c.num >= SOLO_MAX).length;
+console.log(`contents.json lleva ${Object.keys(contents).length} contenidos, ${[...ids.values()].filter((c) => c.file).length} con vídeo y ${nums.size} con número para Max`
+  + (partituras ? `. De ellos, ${partituras === 1 ? 'uno es' : `${partituras} son`} del ${SOLO_MAX} en adelante, que solo pone Max y no salen en el mapa` : ''));
 const varias = palabras.filter((p) => p.filas.length > 1);
 if (varias.length) {
   console.log(`${varias.length === 1 ? 'una palabra lleva' : `${varias.length} palabras llevan`} varios vídeos. Sale una sola vez en el mapa, `

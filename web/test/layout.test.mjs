@@ -156,6 +156,30 @@ test('las filas con la misma etiqueta son una sola palabra con varios vídeos, c
   assert.match(mal.stderr, /«a» y «b» son la misma palabra «Ruido»/);
 });
 
+// Juanlu, el 26-10-2026: las partituras de los músicos las pide Max por
+// número, pero no tienen que salir en los móviles del público.
+test('desde el 900 van en contents.json con su número para Max, pero no salen en el mapa', () => {
+  const raiz = hoja({
+    conceptos: 'id,etiqueta,numero,seccion\npiedra,Piedra,1,T0\nmar,Mar,899,T0\nbosque,Bosque,201,T0\nparti_1,Partitura 1,900,T0\nbosque_p,Bosque,950,T0\n',
+    relaciones: 'origen,destino\npiedra,mar\npiedra,Partitura 1\nparti_1,mar\n',
+    media: { '902_Partitura 2_P.mp4': 'x' },
+  });
+  const r = layout(raiz);
+  assert.equal(r.status, 0, r.stderr);
+  const m = leer(raiz, 'map.json');
+  const c = leer(raiz, 'contents.json');
+  assert.deepEqual(m.nodes.map((n) => n.label).sort(), ['Bosque', 'Mar', 'Piedra'], 'el 899 sale y del 900 en adelante no');
+  assert.ok(!('videos' in m.nodes.find((n) => n.id === 'bosque')), 'el 950 no se junta con la palabra de su misma etiqueta');
+  assert.deepEqual(['parti_1', 'bosque_p', 'partitura_2'].map((id) => c[id]?.num), [900, 950, 902], 'Max las sigue pidiendo por número');
+  assert.equal(c.partitura_2.archivo, '902_Partitura 2_P.mp4', 'la que llega solo por el nombre del vídeo se añade a la hoja igual');
+  assert.ok(m.links.every(([a, b]) => [a, b].every((id) => m.nodes.some((n) => n.id === id))), 'ninguna línea va a una partitura');
+  assert.ok(m.links.some(([a, b]) => [a, b].sort().join('|') === 'mar|piedra'), 'la relación entre dos palabras sigue');
+  assert.match(r.stdout, /línea 3, «Partitura 1» lleva el 900, y desde el 900 no sale en el mapa/);
+  assert.match(r.stdout, /línea 4, «Partitura 1» lleva el 900/, 'también si la relación la nombra por su id');
+  assert.match(r.stdout, /De ellos, 3 son del 900 en adelante/);
+  assert.doesNotMatch(r.stdout, /el único con la sección «P»/, 'su sección no cuenta para los enlaces');
+});
+
 test('una relación con una celda vacía dice qué falta', () => {
   const r = layout(hoja({ conceptos: 'id,etiqueta\na,A\nb,B\n', relaciones: 'origen,destino\na,\n,b\n' }));
   assert.equal(r.status, 1);
