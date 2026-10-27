@@ -324,6 +324,91 @@ test('lo que suena en una pantalla no se acelera ni se frena, y lo que no suena 
   }
 });
 
+// En el iPad, la pantalla completa de Safari saca cada pocos segundos su aviso
+// de cómo salir, así que ahí el toque no la pide. En Android y en un ordenador
+// sí. El iPad se presenta como un Mac con pantalla táctil, o como iPad si se
+// le pide la web de móvil. Se cuenta cuántas veces la pide la página.
+test('el toque pide la pantalla completa en un ordenador y en una tablet Android, y en un iPad no', { skip, timeout: 60000 }, async () => {
+  const SAFARI_IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15';
+  const SAFARI_IPAD_MOVIL = 'Mozilla/5.0 (iPad; CPU OS 15_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1';
+  const CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 7.1.1; SM-P550) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+  const pedidas = async (agente) => {
+    const s = await launch();
+    try {
+      if (agente) {
+        await s.send('Emulation.setUserAgentOverride', { userAgent: agente });
+        await s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      }
+      await s.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+        window.pedidas = 0;
+        Element.prototype.requestFullscreen = function () { window.pedidas += 1; return Promise.resolve(); };
+      ` });
+      await goto(s, `${base}/screen/ipad9`);
+      await s.tap(100, 100);
+      // El toque quita el silencio y pide la pantalla completa en la misma
+      // función, así que cuando ya suena la petición ya se ha hecho o no.
+      await s.until(`document.getElementById('video').muted === false`, 3000);
+      assert.deepEqual(s.errores, [], 'ningún error de JavaScript');
+      // Con await, que si no el finally cierra Chrome antes de que conteste.
+      return await s.evaluate('window.pedidas');
+    } finally {
+      await s.close();
+    }
+  };
+  assert.ok(await pedidas() > 0, 'en un ordenador la pide');
+  assert.ok(await pedidas(CHROME_ANDROID) > 0, 'en una tablet Android la pide');
+  assert.equal(await pedidas(SAFARI_IPAD), 0, 'en un iPad no la pide');
+  assert.equal(await pedidas(SAFARI_IPAD_MOVIL), 0, 'en un iPad con la web de móvil tampoco');
+});
+
+// Un Chrome de antes del 80 no entiende screen.js. Se hace como si fuera uno.
+// screen.js no llega, la comprobación de «?.» falla y faltan append,
+// getOwnPropertyDescriptors y padStart, que llegaron en el 54 y el 57. Tiene
+// que entrar screen-viejo.js, poner el vídeo del Max y sonar al tocarla. Un
+// Chrome de ahora ni la baja.
+test('en un Chrome viejo la pantalla arranca con screen-viejo.js, pone el vídeo y suena al tocarla, y en uno nuevo ni la baja', { skip, timeout: 40000 }, async () => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const v = `document.getElementById('video')`;
+  const bajada = (que) => `performance.getEntriesByType('resource').some((r) => r.name.includes('${que}'))`;
+  const viejo = await launch();
+  const nuevo = await launch();
+  try {
+    viejo.on((m) => {
+      if (m.method !== 'Fetch.requestPaused') return;
+      viejo.send('Fetch.failRequest', { requestId: m.params.requestId, errorReason: 'Failed' }).catch(() => {});
+    });
+    await viejo.send('Fetch.enable', { patterns: [{ urlPattern: '*/js/screen.js' }] });
+    await viejo.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+      const F = window.Function;
+      window.Function = function (...a) {
+        if (String(a[a.length - 1]).includes('?.')) throw new SyntaxError('Chrome viejo');
+        return F(...a);
+      };
+      delete Element.prototype.append;
+      delete Object.getOwnPropertyDescriptors;
+      delete String.prototype.padStart;
+    ` });
+    await goto(viejo, `${base}/screen/tablet9`);
+    assert.ok(await viejo.evaluate(bajada('/js/screen-viejo.js')), 'baja screen-viejo.js');
+    await viejo.until(`document.getElementById('tag').textContent.length > 0`, 5000);
+    await max.send('/tablet9/video', 1);
+    await viejo.until(`!${v}.paused && ${v}.currentSrc.includes('/con.mp4') && ${v}.currentTime > 0.5`, 10000);
+    await viejo.tap(100, 100);
+    await viejo.until(`${v}.muted === false`, 3000);
+    assert.deepEqual(viejo.errores, [], 'ningún error de JavaScript');
+
+    await goto(nuevo, `${base}/screen/tablet8`);
+    assert.ok(await nuevo.evaluate(bajada('/js/screen.js')), 'uno de ahora baja screen.js');
+    assert.equal(await nuevo.evaluate(bajada('screen-viejo')), false, 'y no baja screen-viejo.js');
+  } finally {
+    await max.send('/tablet9/video', 0);
+    await max.close();
+    await viejo.close();
+    await nuevo.close();
+  }
+});
+
 // Un móvil apaga la pantalla a los pocos minutos (el Samsung de Guille, a los
 // 10 como mucho). Mientras espera en negro, la mantiene encendida un vídeo
 // negro en marcha, porque con uno en marcha Chrome no la deja apagarse.

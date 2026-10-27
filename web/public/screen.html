@@ -56,9 +56,15 @@
        está bien, y se queda si falta la conexión o el toque del sonido. */
     .tag {
       position: fixed;
+      /* Cada línea sencilla va delante de la buena para un Chrome de antes del
+         80 (el de screen-viejo.js), que no entiende env() ni clamp() y la
+         dejaba arriba y diminuta. Los de ahora se quedan con la segunda. */
+      left: 3vmin;
       left: calc(3vmin + env(safe-area-inset-left, 0px));
+      bottom: 3vmin;
       bottom: calc(3vmin + env(safe-area-inset-bottom, 0px));
       margin: 0;
+      font-size: 16px;
       font-size: clamp(12px, 2vmin, 26px);
       color: var(--muted);
       transition: opacity 0.6s var(--ease);
@@ -70,12 +76,14 @@
        registro de la web, mecanografiado y con la regla punteada debajo. */
     .ident {
       position: fixed;
+      top: 0; right: 0; bottom: 0; left: 0;   /* lo mismo que inset, para un Chrome viejo */
       inset: 0;
       display: grid;
       place-content: center;
       margin: 0;
       /* Con 15vw también cabe en una pantalla de pie (un iPad, una tele
          vertical), donde 22vmin cortaba justo el número del final. */
+      font-size: 15vw;
       font-size: clamp(48px, min(22vmin, 15vw), 320px);
       font-weight: 700;
       letter-spacing: 0.02em;
@@ -107,5 +115,19 @@
   <p class="ident" id="ident" hidden></p>
   <p class="tag" id="tag" role="status"></p>
   <script type="module" src="/js/screen.js"></script>
+  <!-- Un Chrome de antes del 80, como el de una tablet Android que ya no se
+       actualiza, no entiende screen.js y la pantalla se quedaba en negro. A
+       ese le va la misma página en una sintaxis que entiende, la que hace
+       scripts/screen-viejo.mjs. Los demás ni la bajan. Solo si es un error de
+       sintaxis, que si un día una política de seguridad prohibiera
+       new Function, un navegador de ahora no cargaría las dos. -->
+  <script>
+    try { new Function('a?.b ?? 0'); } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      var viejo = document.createElement('script');
+      viejo.src = '/js/screen-viejo.js';
+      document.body.appendChild(viejo);
+    }
+  </script>
 </body>
 </html>

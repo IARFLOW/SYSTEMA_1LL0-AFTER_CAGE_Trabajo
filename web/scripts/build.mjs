@@ -1,9 +1,11 @@
-// Empaqueta las dependencias de la web pública en un único fichero local y
-// copia las tipografías. Se ejecuta con `npm run build`. El resultado
-// (public/js/vendor.js y public/fonts/*) se versiona en git para que la web
-// funcione sin paso de build en el ordenador de la sala.
+// Empaqueta las dependencias de la web pública en un único fichero local,
+// copia las tipografías y rehace la copia de screen.js para los Chrome viejos.
+// Se ejecuta con `npm run build`. El resultado (public/js/vendor.js,
+// public/js/screen-viejo.js y public/fonts/*) se versiona en git para que la
+// web funcione sin paso de build en el ordenador de la sala.
 import { build } from 'esbuild';
-import { copyFileSync, mkdirSync, statSync } from 'node:fs';
+import { copyFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { DESTINO as VIEJO, screenViejo } from './screen-viejo.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -32,9 +34,12 @@ for (const [src, dst] of fonts) {
   copyFileSync(join(root, 'node_modules', src), join(root, 'public', 'fonts', dst));
 }
 
+writeFileSync(VIEJO, screenViejo());
+
 const kb = (p) => (statSync(p).size / 1024).toFixed(1);
 const gz = (p) => (gzipSync(readFileSync(p)).length / 1024).toFixed(1);
 console.log(`vendor.js  ${kb(out)} kB  (${gz(out)} kB gzip)`);
+console.log(`screen-viejo.js  ${kb(VIEJO)} kB`);
 for (const [, dst] of fonts) {
   const p = join(root, 'public', 'fonts', dst);
   console.log(`${dst.padEnd(24)} ${kb(p)} kB`);

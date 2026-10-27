@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test",
     "build": "node scripts/build.mjs",
+    "screen-viejo": "node scripts/screen-viejo.mjs",
     "layout": "node scripts/layout.mjs",
     "start": "node server/index.js",
     "dev": "node server/index.js --simulate",

@@ -28,6 +28,9 @@ document.title = `Systema · ${name || 'pantalla'}`;
 // ventanas del Mac, por cable). ?version=… lo cambia a mano.
 const TOUCH = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
 const VERSION = new URLSearchParams(location.search).get('version') || (TOUCH ? 'tablet' : 'monitor');
+// Safari del iPad se presenta como un Mac (pide la web de escritorio), pero un
+// Mac no tiene pantalla táctil.
+const IPAD = /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 const fileOf = (v) => v.files?.[VERSION] ?? v.file;
 
 let current = null;   // lo que pone ahora, tal como lo mandó el servidor, o null
@@ -431,6 +434,11 @@ async function keepAwake() {
 
 function fullscreen() {
   if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  // En el iPad, la pantalla completa de Safari saca cada pocos segundos su
+  // aviso de cómo salir, así que ahí no se pide. Ocupa toda la pantalla
+  // abierta desde la pantalla de inicio, o en Safari con «Ocultar barra de
+  // herramientas». En Android sí, que esconde sus barras sin avisos.
+  if (IPAD) return;
   const el = document.documentElement;
   try {
     (el.requestFullscreen ?? el.webkitRequestFullscreen)?.call(el, { navigationUI: 'hide' })?.catch?.(() => {});

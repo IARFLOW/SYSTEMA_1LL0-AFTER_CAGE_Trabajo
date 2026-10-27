@@ -312,7 +312,14 @@ porque en esa pantalla la de móvil se ve igual y pide menos de la mitad de
 Wi-Fi (unos 2,2 Mbps frente a 5). Guille, compruébalo con 15 min de vídeo, que
 en la tablet no está medido.
 
-- En un iPad, una tablet o un móvil hay que tocar la pantalla una vez al encenderla (el «toque diario»), porque sin un toque ningún navegador deja sonar un vídeo. Hasta entonces pone los vídeos sin sonido y lo pide abajo a la izquierda, y el panel dice «sin activar». El mismo toque la pone a pantalla completa. Una recarga lo olvida, también la que se manda desde el panel, y después hay que volver a tocarla. En el iPad, sin HTTPS una web no puede impedir que la pantalla se apague, así que el Bloqueo automático va en «Nunca» en Ajustes > Pantalla y brillo y también en los ajustes de Acceso guiado, que tiene el suyo (Apple, soporte 111795). Con Acceso guiado nadie se sale de Safari. Se empieza con un triple clic en el botón de inicio, y para salir hace falta su código. El modo de bajo consumo tiene que ir apagado, porque con él el iPad se bloquea a los 30 s.
+Una tablet que ya no se actualiza puede llevar un Chrome de antes del 80, que
+no entiende `screen.js` y dejaba la pantalla en negro. Con ese, la página carga
+sola `public/js/screen-viejo.js`, que es la misma pasada a una sintaxis que
+entiende desde el Chrome 51. Los navegadores de ahora ni la bajan. Si se cambia
+`screen.js`, la copia se rehace con `npm run screen-viejo`, y si se olvida, una
+prueba lo avisa.
+
+- En un iPad, una tablet o un móvil hay que tocar la pantalla una vez al encenderla (el «toque diario»), porque sin un toque ningún navegador deja sonar un vídeo. Hasta entonces pone los vídeos sin sonido y lo pide abajo a la izquierda, y el panel dice «sin activar». El mismo toque la pone a pantalla completa, menos en el iPad. Una recarga lo olvida, también la que se manda desde el panel, y después hay que volver a tocarla. En el iPad, la pantalla completa de Safari saca cada pocos segundos su aviso de cómo salir, así que ahí no se pide. Para que ocupe toda la pantalla, se abre desde la pantalla de inicio. En Safari, con la página de esa pantalla abierta, Compartir > Añadir a pantalla de inicio, y desde entonces se abre con ese icono y sin las barras de Safari. Si al abrir el icono pregunta si se abre en Safari, como hace un iPad con iPadOS 18 en España, se queda en Safari con «Ocultar barra de herramientas», en el menú del botón de la izquierda de la dirección, y arriba solo queda la franja de la hora. En el iPad, sin HTTPS una web no puede impedir que la pantalla se apague, así que el Bloqueo automático va en «Nunca» en Ajustes > Pantalla y brillo y también en los ajustes de Acceso guiado, que tiene el suyo (Apple, soporte 111795). Con Acceso guiado nadie se sale de la página. Se empieza con un triple clic en el botón de inicio, y para salir hace falta su código. El modo de bajo consumo tiene que ir apagado, porque con él el iPad se bloquea a los 30 s.
 - Las Raspberry van con Chromium en modo quiosco, que suena sin toque. Cómo se prepara cada una está en `sala/raspberry/`.
 - Las pantallas por cable a un ordenador (tu M4, el de 2018 o el de Guille) van cada una con su ventana de Chrome a pantalla completa, y las abre solas `sala/pantallas/`, en un Mac o en Windows. Ya arranca Chrome con `--autoplay-policy=no-user-gesture-required`, que si no pediría un clic para sonar. Si alguna la pusiera el Max directamente, el servidor solo necesita su `/teleN/video` para que el mapa se entere.
 
@@ -490,10 +497,12 @@ web/
 │   ├── carga.mjs          la prueba de carga
 │   ├── max-de-prueba.mjs  un Max de mentira: manda por OSC la escena del patch
 │   ├── build.mjs          empaqueta d3-zoom en public/js/vendor.js y copia las fuentes
+│   ├── screen-viejo.mjs   screen.js → public/js/screen-viejo.js, para los Chrome de antes del 80
 │   └── demo.mjs           genera docs/demo.html (todo en un fichero, sin servidor)
 ├── public/          la web tal cual se sirve
 │   ├── index.html · css/app.css · js/app.js   el mapa del público
 │   ├── screen.html · js/screen.js             la página de cada pantalla (/screen/<nombre>)
+│   ├── js/screen-viejo.js   la misma, para los Chrome de antes del 80 (generada)
 │   ├── js/vendor.js (d3-selection + d3-zoom)
 │   ├── fonts/       Space Mono 400 y 700 en WOFF2, licencia OFL
 │   └── map.json · contents.json   generados por layout.mjs
