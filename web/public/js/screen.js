@@ -195,39 +195,32 @@ function elapsed() {
 
 // ---------------------------------------------------------------------------
 // Al compás. Cada cuarto de segundo se mira cuánto se separa el vídeo de por
-// dónde va el disparo. Hasta 0,3 s lo corrige acelerando o frenando un poco,
-// que en la imagen no se nota, y con más salta. Un salto tarda en un móvil, así
+// dónde va el disparo, y con más de 0,3 s salta. Un salto tarda en un móvil, así
 // que se apunta cuánto se quedó corto y el siguiente salta ese tanto más allá.
 //
-// Lo que suena no se acelera ni se frena nunca, solo salta. Para cambiar la
-// velocidad sin cambiar el tono, el navegador estira el sonido a trozos, y en
-// un sonido seguido se oyen chasquidos. Lo cazó Juanlu el 26-10-2026 con el
-// 102, que en la pantalla sonaba entrecortado y abierto tal cual no. Aquí, con
-// un tono y el Mac tranquilo, cambiaba de velocidad entre una vez cada 2 s y
-// dos veces por segundo.
-// Lo que no suena sigue yendo clavado, y del 900 en adelante también, aunque
+// Salvo las partituras, no se acelera ni se frena nunca, suene o no, solo
+// salta. Para cambiar la velocidad sin cambiar el tono, el navegador estira el
+// sonido a trozos, y en un sonido seguido se oyen chasquidos. Lo cazó Juanlu el
+// 26-10-2026 con el 102, que en la pantalla sonaba entrecortado y abierto tal
+// cual no. Aquí, con un tono y el Mac tranquilo, cambiaba de velocidad entre
+// una vez cada 2 s y dos veces por segundo. Lo que no suena siguió acelerando y
+// frenando hasta el 27-10-2026, cuando Guille vio a trompicones en los
+// proyectores, que no suenan, el 201 y el 203 (Bosque, con la cámara
+// moviéndose), y los demás bien. Medido ese día con un vídeo sin sonido echado
+// 0,15 s atrás, en 6 s cambiaba 13 veces de velocidad y se saltaba 8
+// fotogramas de 178, y sin cambiarla, ninguno de 180.
+// Así que dos pantallas con el mismo vídeo pueden separarse hasta 0,3 s.
+// Solo del 900 en adelante sigue yendo clavado acelerando y frenando, aunque
 // traiga pista de sonido. Son las vídeo-partituras de los músicos (SOLO_MAX en
-// scripts/layout.mjs), y en ellas manda que vayan a la vez. Con sonido se
-// quedaban de 50 a 80 ms de las demás.
+// scripts/layout.mjs), y en ellas manda que vayan a la vez. Sin eso se quedaban
+// de 50 a 80 ms de las demás (con sonido, 26-10-2026).
 // ---------------------------------------------------------------------------
-const SALTO = 0.3;     // s a partir de los que salta en vez de acelerar
+const SALTO = 0.3;     // s a partir de los que salta (una partitura, hasta ahí, acelera o frena)
 const CLAVADO = 0.01;  // s por debajo de los que se deja a velocidad normal
 const PARTITURA = 900; // desde este número va siempre clavado
 let lead = 0.1;        // s que tarda en saltar esta pantalla, medido en cada salto
 let seekAt = 0;
 let afterSeek = false;
-// Si lo que pone se oye, con el sonido de la pantalla activado y un vídeo con
-// pista de sonido. Safari lo dice en audioTracks y Firefox en mozHasAudio.
-// Chrome no tiene ninguna de las dos, y se sabe por el sonido que lleva
-// decodificado. Hasta el primer segundo se cuenta como que suena, que es lo
-// seguro, por si aún no ha decodificado nada.
-function suena() {
-  if (video.muted || video.volume === 0) return false;
-  if (video.audioTracks) return video.audioTracks.length > 0;
-  if (typeof video.mozHasAudio === 'boolean') return video.mozHasAudio;
-  if (typeof video.webkitAudioDecodedByteCount === 'number') return video.webkitAudioDecodedByteCount > 0 || video.currentTime < 1;
-  return true;
-}
 function keepPace() {
   if (!current?.file || video.paused || video.seeking || video.readyState < 3 || !Number.isFinite(video.duration)) return;
   const want = elapsed();
@@ -247,7 +240,7 @@ function keepPace() {
     video.currentTime = Math.min(want + lead, video.duration);
     return;
   }
-  if (suena() && !(current.num >= PARTITURA)) {
+  if (!(current.num >= PARTITURA)) {
     if (video.playbackRate !== 1) video.playbackRate = 1;
     return;
   }
@@ -449,8 +442,8 @@ function touch() {
   if (!sound) {
     sound = true;
     video.muted = false;
-    // Desde ya, que si iba acelerando para ir al compás, el sonido empezaría
-    // estirado hasta el siguiente cuarto de segundo.
+    // Desde ya, que si era una partitura e iba acelerando para ir al compás,
+    // el sonido empezaría estirado hasta el siguiente cuarto de segundo.
     video.playbackRate = 1;
     // Va dentro del toque, y desde aquí Safari deja sonar ESTE <video> sin más
     // toques, también los que lleguen después. Si no hay nada puesto, load()

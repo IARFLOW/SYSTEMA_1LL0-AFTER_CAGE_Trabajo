@@ -287,18 +287,21 @@ Cada aparato abre en su navegador `http://<IP del Mac>/screen/tele1`, con la IP
 reservada del M4 (`http://192.168.0.10/screen/tele1`, por ejemplo) y el mismo
 nombre que usa el Max. Pone lo que le
 llega a pantalla completa y sin cursor, y se queda en negro cuando no pone
-nada. Si se abre o se reconecta a mitad de un vídeo, entra por donde va. Las
-que ponen el mismo vídeo van clavadas. Cada una mide su reloj contra el del
-servidor y, si se separa, acelera o frena un poco hasta volver, o salta si se
-ha ido más de 0,3 s, así que la que tarda en cargar o se atasca a mitad no se
-queda detrás. En Chrome, con una de dos cargando 1,5 s tarde, quedaron a entre
-0 y 20 ms en diez rondas (20-10-2026). Lo que suena no se acelera ni se frena
-nunca, solo salta si se va más de 0,3 s, porque al cambiarle la velocidad el
-navegador estira el sonido a trozos y en un sonido seguido se oyen chasquidos
-(el 102 de Juanlu, 26-10-2026). Así que dos pantallas con el mismo vídeo con
-sonido pueden ir algo menos clavadas. Del 900 en adelante, las
-vídeo-partituras, van siempre clavadas, aunque traigan pista de sonido, porque
-ahí manda que los músicos vayan a la vez. Cada una va con la hora de su disparo,
+nada. Si se abre o se reconecta a mitad de un vídeo, entra por donde va. Cada
+una mide su reloj contra el del servidor y salta si se ha ido más de 0,3 s, así
+que la que tarda en cargar o se atasca a mitad no se queda detrás. Salvo las
+partituras, no se acelera ni se frena nunca, suene o no. Al cambiarle la
+velocidad, el navegador estira el sonido a trozos y en un sonido seguido se
+oyen chasquidos (el 102 de Juanlu, 26-10-2026), y en la imagen, con la cámara
+moviéndose, se ve a trompicones (el 201 y el 203 en los proyectores, Guille,
+27-10-2026). Medido ese día con un vídeo sin sonido echado 0,15 s atrás, en 6 s
+cambiaba 13 veces de velocidad y se saltaba 8 fotogramas de 178, y sin
+cambiarla, ninguno de 180. Así que dos pantallas con el mismo vídeo pueden
+separarse hasta 0,3 s (con sonido quedaban de 50 a 80 ms, 26-10-2026).
+Del 900 en adelante, las vídeo-partituras, sí van clavadas, acelerando o
+frenando un poco hasta volver, porque ahí manda que los músicos vayan a la vez.
+En Chrome, con una de dos cargando 1,5 s tarde, quedaron a entre 0 y 20 ms en
+diez rondas (20-10-2026). Cada una va con la hora de su disparo,
 así que los mensajes del Max para varias pantallas tienen que salir a la vez,
 en la misma línea de la coll o en un bundle. Si se
 corta la Wi-Fi, lo que está poniendo sigue, avisa abajo a la izquierda y
@@ -389,7 +392,7 @@ tampoco hace avisar a Chrome.
 
 Para las vídeo-partituras del 29-10-2026, cada móvil es una pantalla más, de
 `musico1` a `musico10`, y el Max les manda `/musico1/video 3` como a las teles.
-Van clavados entre ellos, como las demás pantallas.
+Las partituras, del 900 en adelante, van clavadas entre ellos.
 
 `npm run qr-pantallas -- --web http://192.168.0.10/ --musicos 10`, con la IP
 del Mac en la sala, deja en `carteles/` una hoja con un QR por móvil, en HTML y
@@ -570,7 +573,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - Los vídeos se buscan en `media/` en vivo, con sus versiones, y `npm run versiones` las saca de los masters.
 - En el móvil, los vídeos de las pantallas de pie salen derechos y los de los proyectores sin el negro de los lados (`data/movil.csv`, 24-10-2026).
 - Las relaciones salen solas de la sección, el proceso y el medio de cada concepto, en nube y no todos con todos, y cada tipo con su línea (continua, discontinua y punteada).
-- Las pantallas con el mismo vídeo van clavadas, con el reloj del servidor, aunque una cargue tarde o se atasque a mitad (20-10-2026, para las vídeo-partituras de los músicos).
+- Las pantallas con la misma vídeo-partitura van clavadas, con el reloj del servidor, aunque una cargue tarde o se atasque a mitad (20-10-2026, para los músicos). Lo demás va con el mismo reloj y salta si se separa más de 0,3 s, sin acelerar ni frenar (27-10-2026).
 - Un móvil o una tablet que espera en negro no apaga la pantalla, con un vídeo negro en marcha por debajo (20-10-2026, probado en Chrome sin ventana, falta en un móvil de verdad).
 - Los carteles con su QR, la hoja de QR de las pantallas y la prueba de carga.
 

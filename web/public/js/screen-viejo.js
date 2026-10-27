@@ -225,13 +225,6 @@ if (!String.prototype.padStart) {
   let lead = 0.1;
   let seekAt = 0;
   let afterSeek = false;
-  function suena() {
-    if (video.muted || video.volume === 0) return false;
-    if (video.audioTracks) return video.audioTracks.length > 0;
-    if (typeof video.mozHasAudio === "boolean") return video.mozHasAudio;
-    if (typeof video.webkitAudioDecodedByteCount === "number") return video.webkitAudioDecodedByteCount > 0 || video.currentTime < 1;
-    return true;
-  }
   function keepPace() {
     if (!(current == null ? void 0 : current.file) || video.paused || video.seeking || video.readyState < 3 || !Number.isFinite(video.duration)) return;
     const want = elapsed();
@@ -249,7 +242,7 @@ if (!String.prototype.padStart) {
       video.currentTime = Math.min(want + lead, video.duration);
       return;
     }
-    if (suena() && !(current.num >= PARTITURA)) {
+    if (!(current.num >= PARTITURA)) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
