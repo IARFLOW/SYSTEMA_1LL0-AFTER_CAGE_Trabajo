@@ -407,6 +407,7 @@ su versión. En la hoja de 10 QR, el detector de macOS los lee todos, uno a uno
 (20-10-2026).
 
 - Para que el móvil no se apague, mientras espera en negro la página pone debajo un vídeo negro de 10 s en marcha (`public/despierta.mp4`, con una pista de silencio), solo en lo táctil. Chrome no deja apagarse la pantalla con un vídeo en marcha que la ocupe, aunque vaya sin sonido, y la partitura ya lo hace sola. Safari solo si el vídeo tiene sonido y suena, así que en iPhone el negro suena en silencio desde el toque, y sigue debajo si la partitura no tiene sonido. En un móvil de verdad está por probar, así que el bloqueo automático, lo más largo que deje cada móvil.
+- Lo que es negro, ese vídeo de debajo y la imagen de un audio, se pinta negro de verdad. En el Galaxy A30 de la sala, que es AMOLED, el negro de un vídeo salía un poco encendido, y a oscuras se veía un cuadrado claro donde tenía que haber negro y un rectángulo mientras sonaba un audio (27-10-2026). Un vídeo con imagen sale tal cual.
 - Si el vídeo suena, un toque al abrir la página. En iPhone hace falta igualmente, para que no se apague.
 - Si el Mac de la sala tiene puesta la lista de pantallas (`PANTALLAS`), los `musico` van también en ella, o el panel avisa de que no están. Cómo se ponen el 29 y se quitan el 30 está en `sala/mac/README.md`, «El 29, con los músicos».
 
@@ -574,7 +575,7 @@ que ve el público cuando algo falla, el toque que se queda corto y lo que arreg
 - En el móvil, los vídeos de las pantallas de pie salen derechos y los de los proyectores sin el negro de los lados (`data/movil.csv`, 24-10-2026).
 - Las relaciones salen solas de la sección, el proceso y el medio de cada concepto, en nube y no todos con todos, y cada tipo con su línea (continua, discontinua y punteada).
 - Las pantallas con la misma vídeo-partitura van clavadas, con el reloj del servidor, aunque una cargue tarde o se atasque a mitad (20-10-2026, para los músicos). Lo demás va con el mismo reloj y salta si se separa más de 0,3 s, sin acelerar ni frenar (27-10-2026).
-- Un móvil o una tablet que espera en negro no apaga la pantalla, con un vídeo negro en marcha por debajo (20-10-2026, probado en Chrome sin ventana, falta en un móvil de verdad).
+- Un móvil o una tablet que espera en negro no apaga la pantalla, con un vídeo negro en marcha por debajo (20-10-2026, probado en Chrome sin ventana, falta en un móvil de verdad). Ese vídeo y la imagen de un audio salen negro de verdad también en un móvil AMOLED (27-10-2026).
 - Los carteles con su QR, la hoja de QR de las pantallas y la prueba de carga.
 
 **Probado**

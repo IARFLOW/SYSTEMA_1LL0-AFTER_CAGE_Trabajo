@@ -24,6 +24,12 @@
       background: #000;
     }
     video[hidden] { display: none; }
+    /* Lo que es negro, el vídeo de debajo que no deja apagarse un móvil y la
+       imagen de un audio, se pinta negro de verdad. En el Galaxy A30 de la
+       sala, que es AMOLED, el negro de un vídeo salía un poco encendido, y a
+       oscuras se veía un cuadrado claro donde tenía que haber negro y un
+       rectángulo mientras sonaba un audio (Guille, 27-10-2026). */
+    #awake, #video.negro { filter: brightness(0); }
     /* Sin MP4 todavía, el nombre del concepto y lo que le queda, como el clip
        simulado del móvil, a la escala de una tele. */
     .clip {

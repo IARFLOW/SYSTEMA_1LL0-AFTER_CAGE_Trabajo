@@ -457,6 +457,37 @@ test('un móvil que espera en negro tiene un vídeo en marcha para no apagarse, 
   }
 });
 
+// En el Galaxy A30 de la sala, que es AMOLED, el negro de un vídeo salía un
+// poco encendido, y a oscuras se veía un cuadrado claro en el móvil que
+// esperaba en negro y un rectángulo mientras sonaba un audio (Guille,
+// 27-10-2026). Lo que es negro se pinta negro de verdad, y un vídeo con
+// imagen se queda como está.
+test('en una pantalla, el vídeo de debajo y la imagen de un audio se pintan negro de verdad, y un vídeo no', { skip, timeout: 40000 }, async () => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const m = await launch();
+  const filtro = (id) => `getComputedStyle(document.getElementById('${id}')).filter`;
+  try {
+    await mobile(m);
+    await goto(m, `${base}/screen/movil7`);
+    // Esperando en negro, el de debajo.
+    await m.until(`(() => { const a = document.getElementById('awake'); return !a.hidden && !a.paused; })()`, 5000);
+    assert.equal(await m.evaluate(filtro('awake')), 'brightness(0)');
+    // Un audio (el 5), con su imagen en negro.
+    await max.send('/movil7/video', 5);
+    await m.until(`!document.getElementById('video').paused && document.getElementById('video').currentTime > 0.3`, 8000);
+    await m.until(`${filtro('video')} === 'brightness(0)'`, 3000);
+    // Un vídeo con imagen (el 1), tal cual.
+    await max.send('/movil7/video', 1);
+    await m.until(`/con\\.mp4/.test(document.getElementById('video').getAttribute('src') || '') && document.getElementById('video').currentTime > 0.3`, 8000);
+    assert.equal(await m.evaluate(filtro('video')), 'none');
+  } finally {
+    await max.send('/movil7/video', 0);
+    await max.close();
+    await m.close();
+  }
+});
+
 // Pedido el 21-10-2026. El altavoz sale en el móvil del público cuando lo que
 // suena es un audio, y nunca en las pantallas de la sala, músicos incluidos.
 // Guille, el 22-10-2026: el mismo concepto visto desde varias pantallas es una

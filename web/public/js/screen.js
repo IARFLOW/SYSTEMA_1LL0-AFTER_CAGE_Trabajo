@@ -248,6 +248,38 @@ function keepPace() {
 }
 setInterval(() => { keepPace(); awakeTick(); }, 250);
 
+// Lo que solo es sonido (un audio, que npm run versiones saca con la imagen en
+// negro) se pinta negro de verdad, con el filtro de la clase «negro»
+// (screen.html). En el Galaxy A30 de la sala, que es AMOLED, el negro de un
+// vídeo salía un poco encendido, y a oscuras se veía un rectángulo claro
+// mientras sonaba un audio (Guille, 27-10-2026). Cuáles son lo dice
+// contents.json, que los marca con «audio» desde el registro de npm run
+// versiones. Si llega un número que no estaba, o cambia el catálogo, se
+// vuelve a mirar.
+let soloSonido = new Set();
+let conocidos = new Set();
+let leyendo = 0;       // cuándo empezó la lectura en marcha, o 0
+let catVisto = null;   // la marca del catálogo, que llega con cada latido
+function pintarNegro() {
+  video.classList.toggle('negro', Boolean(current && current.file && soloSonido.has(current.id)));
+}
+function leerSoloSonido() {
+  // Una lectura colgada (la Wi-Fi se fue sin cerrar) no frena a las
+  // siguientes más de 10 s.
+  if (leyendo && performance.now() - leyendo < 10000) return;
+  const esta = performance.now();
+  leyendo = esta;
+  const fin = () => { if (leyendo === esta) leyendo = 0; pintarNegro(); };
+  fetch('/contents.json', { cache: 'no-cache' })
+    .then((r) => r.json())
+    .then((c) => {
+      conocidos = new Set(Object.keys(c));
+      soloSonido = new Set(Object.keys(c).filter((id) => c[id] && c[id].audio));
+    })
+    .then(fin, fin);   // sin la lista se pinta como hasta ahora
+}
+leerSoloSonido();
+
 // Carga (o recarga) el vídeo actual entrando por donde va.
 function load(join) {
   current.join = join;
@@ -256,6 +288,8 @@ function load(join) {
   afterSeek = false;
   clip.hidden = true;
   video.hidden = false;
+  pintarNegro();
+  if (!conocidos.has(current.id)) leerSoloSonido();
   video.src = fileOf(current);   // el mismo otra vez también vuelve a empezar
   start();
   armStall();
@@ -541,6 +575,10 @@ function connect() {
       // «conectada» cuando ya ha llegado lo que tiene que poner, no al abrir.
       online = true;
       status();
+    }
+    if (msg.cat && msg.cat !== catVisto) {
+      if (catVisto) leerSoloSonido();
+      catVisto = msg.cat;
     }
     if (msg.type === 'snapshot' || msg.type === 'video') show(msg.video);
     if (msg.type === 'time') onTime(msg);

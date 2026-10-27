@@ -252,6 +252,27 @@ if (!String.prototype.padStart) {
     keepPace();
     awakeTick();
   }, 250);
+  let soloSonido = /* @__PURE__ */ new Set();
+  let conocidos = /* @__PURE__ */ new Set();
+  let leyendo = 0;
+  let catVisto = null;
+  function pintarNegro() {
+    video.classList.toggle("negro", Boolean(current && current.file && soloSonido.has(current.id)));
+  }
+  function leerSoloSonido() {
+    if (leyendo && performance.now() - leyendo < 1e4) return;
+    const esta = performance.now();
+    leyendo = esta;
+    const fin = () => {
+      if (leyendo === esta) leyendo = 0;
+      pintarNegro();
+    };
+    fetch("/contents.json", { cache: "no-cache" }).then((r) => r.json()).then((c) => {
+      conocidos = new Set(Object.keys(c));
+      soloSonido = new Set(Object.keys(c).filter((id) => c[id] && c[id].audio));
+    }).then(fin, fin);
+  }
+  leerSoloSonido();
   function load(join) {
     current.join = join;
     video.playbackRate = 1;
@@ -259,6 +280,8 @@ if (!String.prototype.padStart) {
     afterSeek = false;
     clip.hidden = true;
     video.hidden = false;
+    pintarNegro();
+    if (!conocidos.has(current.id)) leerSoloSonido();
     video.src = fileOf(current);
     start();
     armStall();
@@ -494,6 +517,10 @@ if (!String.prototype.padStart) {
         devMode = Boolean(msg.dev);
         online = true;
         status();
+      }
+      if (msg.cat && msg.cat !== catVisto) {
+        if (catVisto) leerSoloSonido();
+        catVisto = msg.cat;
       }
       if (msg.type === "snapshot" || msg.type === "video") show(msg.video);
       if (msg.type === "time") onTime(msg);
