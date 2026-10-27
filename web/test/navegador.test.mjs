@@ -561,6 +561,151 @@ test('el punto de conexión no usa el verde de «suena en la sala», y los boton
   assert.deepEqual(b.errores, [], 'ningún error de JavaScript');
 });
 
+// Cada QR abre otra pestaña del mapa, y el servidor cierra la más vieja de una
+// IP que pasa de MOVILES_POR_IP. Hasta el 27-oct-2026 la pestaña cerrada volvía
+// a conectar al segundo y echaba a la siguiente, y así en rueda, y en cada
+// vuelta se le cortaba el vídeo a la que el visitante tenía delante. Lo de
+// estar detrás se finge con document.hidden, porque en Chrome sin ventana
+// todas las pestañas están a la vista.
+test('una pestaña de detrás que el servidor cierra no vuelve hasta que se mira, y la de delante sigue con su vídeo', { skip, timeout: 90000 }, async () => {
+  const lineas = [];
+  const otro = spawn(process.execPath, ['server/index.js'], {
+    cwd: web,
+    env: {
+      ...process.env, PORT: '0', OSC_PORT: '0', CATALOGO: join(raiz, 'catalogo'), MEDIA: join(raiz, 'media'),
+      ESTADO: join(temporal('estado-pestanas'), 'p.json'), LIMITAR_LOCAL: '1', MOVILES_POR_IP: '2',
+    },
+  });
+  otro.stdout.setEncoding('utf8');
+  otro.stdout.on('data', (d) => { lineas.push(...d.split('\n')); });
+  const espera = (ms) => new Promise((r) => { setTimeout(r, ms); });
+  let url;
+  for (let i = 0; i < 100 && !url; i += 1) {
+    const l = lineas.find((x) => /web del público en http:\/\/0\.0\.0\.0:\d+/.test(x));
+    if (l) url = `http://127.0.0.1:${/0\.0\.0\.0:(\d+)/.exec(l)[1]}`;
+    else await espera(100);
+  }
+  const echadas = () => lineas.filter((l) => /mapas abiertos, así que cierro el más viejo/.test(l)).length;
+  const pestanas = await Promise.all([launch(), launch(), launch()]);
+  const [vieja, media, nueva] = pestanas;
+  // Detrás o a la vista, como al cambiar de pestaña.
+  const ver = (p, si) => p.evaluate(`window.__oculta = ${!si}; document.dispatchEvent(new Event('visibilitychange')); true`);
+  const conectada = (p) => p.evaluate(`document.getElementById('conn').classList.contains('on')`);
+  const suena = (p) => p.evaluate(`!document.getElementById('player').hidden && !document.getElementById('video').paused`);
+  try {
+    for (const p of pestanas) {
+      await mobile(p);
+      await p.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__oculta = false;
+        Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get: () => window.__oculta });
+        Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get: () => (window.__oculta ? 'hidden' : 'visible') });` });
+    }
+    // Dos pestañas viejas que se quedan detrás, y la nueva, delante, con un vídeo.
+    for (const p of [vieja, media]) {
+      await goto(p, `${url}/`);
+      await p.until(`document.getElementById('conn').classList.contains('on')`, 5000);
+      await ver(p, false);
+    }
+    await goto(nueva, `${url}/`);
+    await nueva.until(`document.getElementById('conn').classList.contains('on')`, 5000);
+    // Con la rueda, en 3 s le tocaba varias veces a cada una.
+    await espera(3000);
+    assert.equal(echadas(), 1, 'el servidor cierra la vieja una vez y no hay rueda');
+    const r = await nueva.evaluate(`(() => { const r = document.querySelector('[data-id="con"] .word').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await nueva.tap(r.x, r.y);
+    await nueva.until(`!document.getElementById('player').hidden && document.getElementById('video').currentTime > 0.5`, 8000);
+    await espera(4000);
+    assert.equal(echadas(), 1);
+    assert.equal(await conectada(vieja), false, 'la vieja, detrás, no vuelve sola');
+    assert.equal(await conectada(nueva), true);
+    assert.equal(await suena(nueva), true, 'el vídeo de delante sigue');
+    // Al mirar la vieja vuelve, y la que cierra ahora el servidor (la de en
+    // medio, detrás) tampoco vuelve sola.
+    await ver(vieja, true);
+    await vieja.until(`document.getElementById('conn').classList.contains('on')`, 5000);
+    await espera(3000);
+    assert.equal(echadas(), 2);
+    assert.equal(await conectada(media), false);
+    assert.equal(await conectada(nueva), true, 'a la de delante no le toca');
+    assert.equal(await suena(nueva), true);
+    // Una que el servidor cierra estando a la vista (dos ventanas en un
+    // portátil) vuelve sola, y la que echa al volver está detrás y se queda.
+    await ver(vieja, false);
+    await ver(media, true);
+    for (let i = 0; i < 80 && echadas() < 4; i += 1) await espera(100);
+    await espera(3000);
+    assert.equal(echadas(), 4, 'la nueva vuelve y cierra la vieja, y ahí se para');
+    assert.equal(await conectada(media), true);
+    assert.equal(await conectada(nueva), true, 'la de a la vista vuelve sola');
+    assert.equal(await conectada(vieja), false);
+    assert.match(await (await fetch(`${url}/health`)).text(), /^phones 2$/m, 'nunca más de 2 a la vez');
+  } finally {
+    await Promise.all(pestanas.map((p) => p.close()));
+    if (otro.exitCode === null && otro.signalCode === null) await new Promise((res) => { otro.once('exit', res); otro.kill(); });
+  }
+});
+
+// Con la sala llena llegan al panel varias noticias por segundo, y cada una
+// rehacía los botones de cada pantalla. Un clic con ratón que pillaba una entre
+// pulsar y soltar se perdía, y era justo el «recargar» de una tele en negro
+// (lo arreglé el 27-oct-2026).
+test('un clic del panel llega aunque mientras se pulsa lleguen noticias de la sala', { skip, timeout: 30000 }, async () => {
+  const oscLine = out.find((x) => /Max por OSC en 127\.0\.0\.1:(\d+)/.test(x));
+  const max = new Client('127.0.0.1', Number(/127\.0\.0\.1:(\d+)/.exec(oscLine)[1]));
+  const espera = (ms) => new Promise((r) => { setTimeout(r, ms); });
+  // Una pantalla presentada a mano, para que su fila tenga los botones activos.
+  const tele = new WebSocket(`${base.replace('http', 'ws')}/ws`);
+  await new Promise((r) => { tele.addEventListener('open', r, { once: true }); });
+  tele.send(JSON.stringify({ type: 'hello', role: 'screen', name: 'tele7' }));
+  const p = await launch();
+  try {
+    await goto(p, `${base}/panel`);
+    const boton = `document.querySelector('[data-k="tele7:identificar"]')`;
+    await p.until(`${boton} && !${boton}.disabled`, 5000);
+    // Con las pantallas de las pruebas de antes, la fila queda por debajo de
+    // la ventana (en y=748 con 469 de alto, medido) y el ratón pulsaba fuera.
+    // Se baja hasta ella, como haría quien lleva el panel.
+    await p.evaluate(`${boton}.scrollIntoView({ block: 'center' }); true`);
+    const r = await p.evaluate(`(() => { const r = ${boton}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, alto: innerHeight, ancho: innerWidth }; })()`);
+    assert.ok(r.y > 0 && r.y < r.alto && r.x > 0 && r.x < r.ancho, `el botón está a la vista (${JSON.stringify(r)})`);
+    // Con el botón apretado, el Max manda algo cada 40 ms, y lo último llega
+    // 400 ms antes de soltar, como en un clic lento con el trackpad. Lo que se
+    // pinta después de soltar solo puede ser lo que esperaba.
+    const lluvia = async (direccion) => {
+      for (let i = 0; i < 10; i += 1) { await max.send(direccion, i); await espera(40); }
+      await espera(400);
+    };
+    const pintado = (direccion) => p.evaluate(`document.getElementById('osc').textContent.includes('${direccion}')`);
+    const veces = () => out.filter((l) => /desde el panel, identificar tele7/.test(l)).length;
+    const llegan = async (n) => { for (let i = 0; i < 30 && veces() < n; i += 1) await espera(100); return veces(); };
+    const raton = (type) => p.send('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    await p.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x, y: r.y });
+    await raton('mousePressed');
+    await lluvia('/sound');
+    assert.equal(await pintado('/sound'), false, 'con el botón apretado no se repinta');
+    await raton('mouseReleased');
+    assert.equal(await llegan(1), 1, 'el clic llega al servidor');
+    await p.until(`document.getElementById('osc').textContent.includes('/sound')`, 1000);
+    // Con la barra espaciadora el clic sale al soltarla, y solo si el botón
+    // sigue siendo el mismo.
+    const tecla = (type) => p.send('Input.dispatchKeyEvent', {
+      type, key: ' ', code: 'Space', windowsVirtualKeyCode: 32, ...(type === 'keyDown' ? { text: ' ' } : {}),
+    });
+    await p.evaluate(`${boton}.focus(); true`);
+    await tecla('keyDown');
+    await lluvia('/light');
+    assert.equal(await pintado('/light'), false, 'con la barra apretada no se repinta');
+    await tecla('keyUp');
+    assert.equal(await llegan(2), 2, 'con la barra también llega');
+    await p.until(`document.getElementById('osc').textContent.includes('/light')`, 1000);
+    assert.deepEqual(p.errores, [], 'ningún error de JavaScript en el panel');
+  } finally {
+    tele.close();
+    await max.close();
+    await p.close();
+  }
+});
+
 test('sin conexión, el aviso tapa al hint y la barra se apaga', { skip }, async () => {
   srv.kill();
   await b.until(`!document.getElementById('toast').hidden`, 8000);

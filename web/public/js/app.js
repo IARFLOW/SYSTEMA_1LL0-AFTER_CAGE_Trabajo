@@ -1000,7 +1000,7 @@ function connect() {
   // hay reconexiones en bucle. Al perderla no se espera al cierre educado y se
   // suelta ya.
   let beatMs = 0;
-  const lost = () => {
+  const lost = (ev) => {
     if (gone) return;
     gone = true;
     clearTimeout(watchdog);
@@ -1009,6 +1009,19 @@ function connect() {
     connDot.classList.remove('on');
     setOffline(true);
     close(); // al perder la Wi-Fi se detiene y se avisa, que es requisito
+    // El servidor cierra el mapa más viejo de un móvil que tiene demasiados
+    // abiertos (cada QR abre una pestaña). Una pestaña de detrás no vuelve
+    // hasta que el visitante la mire. Volviendo al segundo echaba a la
+    // siguiente, esa a otra, y así en rueda, y en cada vuelta se le cortaba el
+    // vídeo a la que tenía delante (lo arreglé el 27-oct-2026).
+    if (ev?.code === 1008 && ev.reason === 'otra pestaña' && document.hidden) {
+      document.addEventListener('visibilitychange', function vuelve() {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', vuelve);
+        connect();
+      });
+      return;
+    }
     setTimeout(connect, retry);
     retry = Math.min(retry * 2, 10000); // 1 → 2 → 4 → 8 → 10 s
   };

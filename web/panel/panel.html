@@ -148,8 +148,9 @@
       b2.type = 'button';
       b2.dataset.k = `${s.name}:recargar`;
       // Un navegador olvida el toque al recargar. Un iPad o una tablet se
-      // quedan sin sonido y sin pantalla completa hasta que alguien los toque.
-      b2.title = 'un iPad o una tablet vuelven a necesitar un toque para sonar y ponerse a pantalla completa';
+      // quedan sin sonido hasta que alguien los toque, y la tablet, además,
+      // sin pantalla completa (el iPad ya no la usa).
+      b2.title = 'un iPad o una tablet vuelven a necesitar un toque para sonar (la tablet, también para ponerse a pantalla completa)';
       b2.addEventListener('click', () => enviar({ type: 'panel:reload', screen: s.name }));
       if (!s.pages.length) { b1.disabled = true; b2.disabled = true; }
       acciones.append(b1, b2);
@@ -178,7 +179,32 @@
       return fila;
     }
 
+    // Un clic solo cuenta si el botón sigue ahí al soltar, y con la sala llena
+    // llegan varias noticias por segundo y cada una rehacía los botones de cada
+    // pantalla y movía los de debajo. Un «recargar» se perdía si llegaba una
+    // entre pulsar y soltar (lo arreglé el 27-oct-2026). Con algo apretado en
+    // el panel, con el ratón, el dedo o la barra espaciadora, se espera, y al
+    // soltar se pinta lo último que llegó. Si el soltar no llega (un clic
+    // secundario abre su menú y no suelta), a los 3 s se pinta igual con la
+    // noticia siguiente.
+    let apretado = 0;
+    let pendiente = null;
+    const aprieta = () => { apretado = performance.now(); };
+    addEventListener('pointerdown', aprieta);
+    addEventListener('keydown', (ev) => { if (ev.key === ' ' && !ev.repeat) aprieta(); });
+    const soltado = () => {
+      if (!apretado) return;
+      apretado = 0;
+      // Detrás del clic, que con el ratón sale en la misma tarea que el
+      // pointerup y con la barra en la del keyup. Con el dedo sale aparte,
+      // pero Chrome busca el botón en el momento del toque y llega igual.
+      setTimeout(() => { if (pendiente) pintar(pendiente); }, 0);
+    };
+    for (const t of ['pointerup', 'pointercancel', 'keyup', 'blur']) addEventListener(t, soltado);
+
     function pintar(m) {
+      if (apretado && performance.now() - apretado < 3000) { pendiente = m; return; }
+      pendiente = null;
       ultimo = m;
       recibido = performance.now();
       // El foco del teclado se queda en el mismo botón aunque se repinte todo.
